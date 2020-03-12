@@ -147,6 +147,9 @@ chan schedule[BSid_t];    // BS signal to execute radio resource scheduling
 
 chan scheduled[BSid_t];    // RRM signal to BS that scheduling is done
 
+// --------------------------------------------------------------------------------------------
+// FRAME SCHEDULING
+// --------------------------------------------------------------------------------------------
 
 
 
@@ -314,7 +317,7 @@ x = 0</label>
 		<transition>
 			<source ref="id3"/>
 			<target ref="id7"/>
-			<label kind="assignment" x="-374" y="-136">x = 0</label>
+			<label kind="assignment" x="-365" y="-136">x = 0</label>
 		</transition>
 	</template>
 	<template>
