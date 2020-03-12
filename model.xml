@@ -157,6 +157,7 @@ chan scheduled[BSid_t];    // RRM signal to BS that scheduling is done
 	<template>
 		<name>Scheduler</name>
 		<parameter>int id</parameter>
+		<declaration>// reset the ACK</declaration>
 		<location id="id0" x="-569" y="-476">
 			<name x="-579" y="-510">INITIAL</name>
 		</location>
@@ -176,7 +177,6 @@ chan scheduled[BSid_t];    // RRM signal to BS that scheduling is done
 		<transition>
 			<source ref="id1"/>
 			<target ref="id2"/>
-			<label kind="assignment" x="-551" y="-331">reset the ACK</label>
 		</transition>
 		<transition>
 			<source ref="id0"/>
