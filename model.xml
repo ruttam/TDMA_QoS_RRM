@@ -8,10 +8,7 @@
 // unit value, e.g. to 10, 100
 int unit = 1000;    // time unit ratio wrt 1 ms
 
-int frame_size = 2 * 1000;    // initial frame size (ms * unit)
-
-// mini-slot
-int UCCH_slot_size = 10;    // size of a slot for transmitting meta data
+int frame_size = 2 * 1000;    // frame size (ms * unit)
 
 clock frame_clk;    // frame clock timer
 
@@ -179,7 +176,6 @@ chan scheduled[BSid_t];    // RRM signal to BS that scheduling is done
 		<transition>
 			<source ref="id1"/>
 			<target ref="id2"/>
-			<label kind="assignment" x="-551" y="-331">reset the ACK</label>
 		</transition>
 		<transition>
 			<source ref="id0"/>
@@ -476,8 +472,8 @@ z' == 0</label>
 			<urgent/>
 		</location>
 		<location id="id20" x="-731" y="-884">
-			<name x="-765" y="-935">META_DATA</name>
-			<label kind="invariant" x="-773" y="-918">x &lt;= slot_start[i]</label>
+			<name x="-765" y="-918">META_DATA</name>
+			<urgent/>
 		</location>
 		<location id="id21" x="-1071" y="-561">
 			<name x="-1088" y="-544">DL_NACK</name>
@@ -497,8 +493,8 @@ z' == 0</label>
 			<urgent/>
 		</location>
 		<location id="id25" x="-986" y="-884">
-			<name x="-1020" y="-935">TRANSMIT</name>
-			<label kind="invariant" x="-1037" y="-918">x &lt;= slot_size[id]</label>
+			<name x="-996" y="-918">TRANSMIT</name>
+			<urgent/>
 		</location>
 		<location id="id26" x="-544" y="-654">
 			<name x="-527" y="-688">UL_ACK</name>
@@ -532,11 +528,11 @@ z' == 0</label>
 		<transition>
 			<source ref="id29"/>
 			<target ref="id18"/>
-			<label kind="synchronisation" x="-578" y="-952">disconnected[id]?</label>
+			<label kind="synchronisation" x="-578" y="-926">disconnected[id]?</label>
 			<label kind="assignment" x="-1445" y="-926">z = 0,
 x = 0</label>
-			<nail x="-459" y="-952"/>
-			<nail x="-1402" y="-952"/>
+			<nail x="-459" y="-926"/>
+			<nail x="-1401" y="-925"/>
 			<nail x="-1401" y="-653"/>
 		</transition>
 		<transition>
@@ -582,8 +578,7 @@ x = 0</label>
 			<source ref="id28"/>
 			<target ref="id30"/>
 			<label kind="guard" x="-688" y="-586">y &gt;= sleep_time[id]</label>
-			<label kind="assignment" x="-688" y="-561">y = 0,
-ACK[id] == 0</label>
+			<label kind="assignment" x="-603" y="-561">y = 0</label>
 		</transition>
 		<transition>
 			<source ref="id26"/>
@@ -604,7 +599,6 @@ ACK[id] == 0</label>
 		<transition>
 			<source ref="id20"/>
 			<target ref="id25"/>
-			<label kind="guard" x="-918" y="-884">x &gt;= slot_start[id]</label>
 		</transition>
 		<transition>
 			<source ref="id21"/>
@@ -636,7 +630,6 @@ ACK[id] == 0</label>
 		<transition>
 			<source ref="id27"/>
 			<target ref="id20"/>
-			<label kind="assignment" x="-773" y="-841">x = 0</label>
 		</transition>
 	</template>
 	<template>
@@ -743,8 +736,7 @@ x = 0</label>
 		<transition>
 			<source ref="id35"/>
 			<target ref="id32"/>
-			<label kind="synchronisation" x="-2643" y="-3187">connected[id]!</label>
-			<label kind="assignment" x="-2643" y="-3170">ACK[id] = 0</label>
+			<label kind="synchronisation" x="-2643" y="-3170">connected[id]!</label>
 			<nail x="-2856" y="-3145"/>
 		</transition>
 		<transition>
@@ -859,8 +851,8 @@ int qca_latency;</declaration>
 			<name x="-1462" y="-824">SLEEP</name>
 			<label kind="invariant" x="-1538" y="-807">y &lt;= sleep_time[id]</label>
 		</location>
-		<location id="id51" x="-1037" y="-748">
-			<name x="-1045" y="-782">UL_NACK</name>
+		<location id="id51" x="-1054" y="-689">
+			<name x="-1062" y="-723">UL_NACK</name>
 			<urgent/>
 		</location>
 		<location id="id52" x="-1156" y="-536">
@@ -892,7 +884,7 @@ int qca_latency;</declaration>
 			<target ref="id51"/>
 			<label kind="guard" x="-1028" y="-536">ACK[id] == 0</label>
 			<nail x="-926" y="-536"/>
-			<nail x="-926" y="-748"/>
+			<nail x="-926" y="-689"/>
 		</transition>
 		<transition>
 			<source ref="id50"/>
