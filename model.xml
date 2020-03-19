@@ -28,11 +28,11 @@ typedef int [0, 5 - 1] profileId_t;
 
 profileId_t profile[UEid_t] = {4, 1, 2, 3, 4, 2, 0, 1, 2, 3};
 
-profileId_t initial = 0;
-profileId_t RTa = 1;           // Real-Time Audio
-profileId_t HqRTa = 2;         // High-Quality Real-Time Audio
-profileId_t sRTa = 3;          // Sporadic Real-Time Audio
-profileId_t Listen_Only = 4;   // Listen-Only
+profileId_t initial = 0;        // Connected mode
+profileId_t Listen_Only = 1;    // Listen-Only
+profileId_t sRTa = 2;           // Sporadic Real-Time Audio
+profileId_t RTa = 3;            // Real-Time Audio
+profileId_t HqRTa = 4;          // High-Quality Real-Time Audio
 
 int latency[profileId_t] = {-1, 40, 20, 70, 2500};    // Latency requirements for each of the profiles (they can be negotiated by the BS)
 
@@ -150,20 +150,6 @@ int MCS;    // MCS assigned for this PP transmissions
 //}
 
 // --------------------------------------------------------------------------------------------
-// BASE STATION
-// --------------------------------------------------------------------------------------------
-
-broadcast chan schedule[BSid_t];    // BS signal to execute radio resource scheduling
-
-broadcast chan scheduled[BSid_t];    // RRM signal to BS that scheduling is done
-
-void add_UE(UEid_t id)
-{
-    
-
-}
-
-// --------------------------------------------------------------------------------------------
 // QUEUE
 // --------------------------------------------------------------------------------------------
 
@@ -172,13 +158,11 @@ typedef struct {
     UEid_t id;    // UE's ID
 } Node_t;
 
-typedef struct {
-    // member variables
-    Node_t queue[UEid_t];
-    
+typedef struct {  
     int front; // = -1;
     int rear; // = -1;
     int size; // = -1;
+    Node_t queue[UEid_t];
 } Queue_t;
 
     
@@ -221,7 +205,7 @@ void insert(Node_t value, Queue_t q)    // add a node according to its priority
         {
             for(i = q.size-1; i &gt;= 0; i--)
             {
-                if(value.prior &lt; q.queue[i].prior &amp;&amp; !found)
+                if(value.prior &gt; q.queue[i].prior &amp;&amp; !found)
                 {
                     q.queue[i+1] = q.queue[i];
                     found = true;
@@ -298,6 +282,34 @@ int dequeue(Queue_t q)
     }
 }
 
+// --------------------------------------------------------------------------------------------
+// BASE STATION
+// --------------------------------------------------------------------------------------------
+
+broadcast chan schedule[BSid_t];    // BS signal to execute radio resource scheduling
+
+broadcast chan scheduled[BSid_t];    // RRM signal to BS that scheduling is done
+
+Queue_t priority_queue = {-1, -1, -1, {{-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}}};    // Queue of active devices with profiles RTa, hqRTa and sRTA
+
+Queue_t request_queue = {-1, -1, -1, {{-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}}};    // Queue of active devices in connected and Listen-Only modes
+
+void add_UE(UEid_t id)
+{
+    if(profile[id] == initial || profile[id] == Listen_Only)
+    {
+        Node_t new_node = {-1, id};
+        enqueue(new_node, request_queue);
+    }
+    else
+    {
+        Node_t new_node = {profile[id], id};
+        insert(new_node, priority_queue);
+    }
+}
+
+
+
 
 
 
@@ -366,7 +378,7 @@ int GI = 10;    // Guard Interval
 
 int channel_swicth = 10;    // latency of changing the frequency
 
-bool re-transmission = false;</declaration>
+bool retransmission = false;</declaration>
 		<location id="id3" x="-374" y="-246">
 			<name x="-391" y="-297">INITIAL</name>
 			<label kind="invariant" x="-391" y="-280">x &lt;= 0</label>
@@ -393,7 +405,6 @@ x &lt;= slot_size[slot]</label>
 		</location>
 		<location id="id8" x="-34" y="230">
 			<name x="-59" y="246">UL_ACK</name>
-			<label kind="invariant" x="-68" y="263">add_UE(id)</label>
 			<urgent/>
 		</location>
 		<location id="id9" x="-127" y="102">
@@ -409,7 +420,7 @@ x &lt;= slot_size[slot]</label>
 			<urgent/>
 		</location>
 		<location id="id12" x="-212" y="-76">
-			<name x="-271" y="-59">RE-TRANSMISSION</name>
+			<name x="-271" y="-59">RETRANSMISSION</name>
 			<urgent/>
 		</location>
 		<init ref="id3"/>
@@ -425,19 +436,19 @@ x &lt;= slot_size[slot]</label>
 		<transition>
 			<source ref="id7"/>
 			<target ref="id12"/>
-			<label kind="guard" x="-348" y="-76">re-transmission</label>
+			<label kind="guard" x="-348" y="-76">retransmission</label>
 		</transition>
 		<transition>
 			<source ref="id7"/>
 			<target ref="id11"/>
-			<label kind="guard" x="-484" y="-110">!re-transmission</label>
+			<label kind="guard" x="-484" y="-110">!retransmission</label>
 		</transition>
 		<transition>
 			<source ref="id10"/>
 			<target ref="id7"/>
 			<label kind="guard" x="-518" y="-17">slot &gt;= number_slots</label>
 			<label kind="synchronisation" x="-467" y="-34">schedule[id]!</label>
-			<label kind="assignment" x="-518" y="0">re-transmission = !re-transmission,
+			<label kind="assignment" x="-518" y="0">retransmission = !retransmission,
 slot = 0,
 number_slots = 0,
 x = 0</label>
@@ -460,8 +471,9 @@ x = 0</label>
 		<transition>
 			<source ref="id8"/>
 			<target ref="id10"/>
-			<label kind="assignment" x="-187" y="187">ACK[current] = 1,
-RACH_id = -1</label>
+			<label kind="assignment" x="-195" y="229">ACK[current] = 1,
+RACH_id = -1,
+add_UE(id)</label>
 			<nail x="-195" y="230"/>
 		</transition>
 		<transition>
