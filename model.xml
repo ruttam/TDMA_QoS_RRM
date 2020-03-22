@@ -3,62 +3,93 @@
 <nta>
 	<declaration>// Place global declarations here.
 
-// In this model time is measured in ms,
-// it can be further atomized changing the
-// unit value, e.g. to 10, 100
-int unit = 1000;    // time unit ratio wrt 1 ms
+// --------------------------------------------------------------------------------------------
+// GLOBAL CONSTANTS
+// Provides supported system capacity, number of active users, time units, frame information
+// --------------------------------------------------------------------------------------------
 
-int frame_size = 2 * 1000;    // initial frame size (ms * unit)
-
-// mini-slot
-int UCCH_slot_size = 10;    // size of a slot for transmitting meta data
+// In this model time is measured in us, it can be further atomized changing the
+// unit value, e.g. to 10, 100, 1000
+const int unit = 1000;    // time unit ratio wrt 1 us
 
 clock frame_clk;    // frame clock timer
 
-int broadcast_channel = 5;    // broadcast channel frequency (?)
+const int number_BS = 2;    // number of Base Stations
+typedef int [0, number_BS - 1] BSid_t;
 
-int number_BS = 2;    // number of Base Stations
-typedef int [0, 2 - 1] BSid_t;
+const int number_UE = 10;    // number of User Equipment
+typedef int [0, number_UE - 1] UEid_t;
 
-int number_UE = 10;    // number of User Equipment
-typedef int [0, 10 - 1] UEid_t;
+const int number_profiles = 5;    // number of UE profiles
+typedef int [0, number_profiles - 1] profileId_t;
 
-int number_profiles = 5;    // number of UE profiles
-typedef int [0, 5 - 1] profileId_t;
-
-profileId_t profile[UEid_t] = {4, 1, 2, 3, 4, 2, 0, 1, 2, 3};
-
-profileId_t initial = 0;        // Connected mode
+profileId_t initial = 0;        // Initial connected mode
 profileId_t Listen_Only = 1;    // Listen-Only
 profileId_t sRTa = 2;           // Sporadic Real-Time Audio
 profileId_t RTa = 3;            // Real-Time Audio
 profileId_t HqRTa = 4;          // High-Quality Real-Time Audio
 
-int latency[profileId_t] = {-1, 40, 20, 70, 2500};    // Latency requirements for each of the profiles (they can be negotiated by the BS)
+const int latency[profileId_t] = {-1, 2500, 70, 40, 20};    // latency requirements of each type of profiles
 
 // --------------------------------------------------------------------------------------------
-// INIT
+// Initial variables of the system
 // --------------------------------------------------------------------------------------------
+
+profileId_t profile[UEid_t] = {4, 1, 2, 3, 4, 2, 0, 1, 2, 3};    // initial profiles of the UEs - can be negotiated with the BS
+
+int frame_size = 20 * unit;    // initial frame size (us * unit)
+
+int UCCH_size = 500;    // mini-slot: size of a slot for transmitting meta data
+
+double broadcast_channel = 2.4;    // broadcast channel frequency (GHz)
+
+// --------------------------------------------------------------------------------------------
+// UE INITIAL
+// --------------------------------------------------------------------------------------------
+
+// CONSTANTS ----------------------------------------------------------------------------------
 
 broadcast chan started[UEid_t];    // UE start signal
 
-int offsets[2][UEid_t] = 
+const int offset_used = -1;    // offset ID used (-1: using default)
+
+const int offsets[2][UEid_t] = 
 {
     {1, 2, 3, 4, 5, 6, 7, 8, 9, 10},
     {10, 20, 5, 0, 10, 40, 7, 15, 30, 0}
 };
 
-int start_offset[UEid_t] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0};    // default offset of UE start signal
+// VARIABLES ----------------------------------------------------------------------------------
 
-void setOffset(int offset_id)    // setting offset values from possible variations in offsets
+int start_offsets[UEid_t] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0};    // default offset of UE start signal
+
+// FUNCTIONS ----------------------------------------------------------------------------------
+
+void setOffset()    // setting offset values from possible variations in offsets
 {
-    for(i: UEid_t) start_offset[i] = offsets[offset_id][i] * unit;
+    if(offset_used != -1)
+        for(i: UEid_t) start_offsets[i] = offsets[offset_used][i] * unit;
 }
 
 // --------------------------------------------------------------------------------------------
-// CONNECT
+// UE CONNECT
 // --------------------------------------------------------------------------------------------
 
+// CONSTANTS ----------------------------------------------------------------------------------
+
+broadcast chan connected[UEid_t];    // UE connected signal
+
+broadcast chan disconnected[UEid_t];    // UE disconnected signal
+
+broadcast chan failed[UEid_t];    // UE signal for failed latency requirements 
+
+broadcast chan RACH;    // UE signal to BS through the random access channel in order to connect
+
+const int disconnect_timeout = 5000 * 1;    // timeout for disconnect in ms
+
+// VARIABLES ----------------------------------------------------------------------------------
+
+// connection channel stability
 int connection_channel_stability[UEid_t][2] = 
 {
     {25, 75},
@@ -73,25 +104,17 @@ int connection_channel_stability[UEid_t][2] =
     {25, 75}
 };
 
-broadcast chan connected[UEid_t];    // UE connected signal
-
-broadcast chan disconnected[UEid_t];    // UE disconnected signal
-
-broadcast chan failed[UEid_t];    // UE signal for failed latency requirements 
-
-int disconnect_timeout = 5000 * 1;    // timeout for disconnect in ms
-
 int RACH_start = 0;    // start time of random access channel in the current frame
 
 int RACH_size = 0;    // sizes of random access channel slot (ms * unit)
 
-broadcast chan RACH;    // UE signal to BS through the random access channel in order to connect
-
-int RACH_id = -1;    // UE id whose 
+int RACH_id = -1;    // UE id which sends RACH signal in the current RACH slot
 
 // --------------------------------------------------------------------------------------------
 // LISTEN_ONLY
 // --------------------------------------------------------------------------------------------
+
+// CONSTANTS ----------------------------------------------------------------------------------
 
 broadcast chan listen[UEid_t];    // UE to set Listen-Only mode signal
 
@@ -103,8 +126,11 @@ broadcast chan wake_up[UEid_t];    // UE signal for RF module to wake-up
 
 broadcast chan UCCH[UEid_t];    // Up-Link control channel
 
+// VARIABLES ----------------------------------------------------------------------------------
+
 int BCH_duration = 5;    // initial BCH transmission duration
 
+// initial channel interference probability
 int channel_interference_probability[UEid_t][2] = 
 {
     {25, 75},
@@ -119,6 +145,13 @@ int channel_interference_probability[UEid_t][2] =
     {25, 75}
 };
 
+// --------------------------------------------------------------------------------------------
+// TODO
+// 
+// Channel interference probability is transmission success probability. It must be calculated to
+// depend on the UE distance from the BS and used MCS - the error correction level
+// --------------------------------------------------------------------------------------------
+
 bool ACK[UEid_t] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0};    // BS acknowledge of UL transmissions from the UE
 
 int sleep_time[UEid_t] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0};    // RRM (Radio Resource Manager) calculated sleep time for UE after receiving UL ACKs
@@ -126,6 +159,8 @@ int sleep_time[UEid_t] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0};    // RRM (Radio Resour
 // --------------------------------------------------------------------------------------------
 // STREAM
 // --------------------------------------------------------------------------------------------
+
+// CONSTANTS ----------------------------------------------------------------------------------
 
 broadcast chan stream[UEid_t];    // UE signal to start audio streaming
 
@@ -136,6 +171,8 @@ broadcast chan stop_sample[UEid_t];    // UE signal to DSP to stop audio samplin
 broadcast chan sample_ready[UEid_t];    // UE signal from DSP that a new audio sample is ready loaded in the memory
 
 broadcast chan UTCH[UEid_t];    // up-link UE signal to BS transmitting audio data
+
+// VARIABLES ----------------------------------------------------------------------------------
 
 int samples_ready[UEid_t] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0};    // audio samples ready to be read from memory
 
@@ -159,12 +196,11 @@ typedef struct {
 } Node_t;
 
 typedef struct {  
-    int front; // = -1;
-    int rear; // = -1;
-    int size; // = -1;
+    int front;
+    int rear;
+    int size;
     Node_t queue[UEid_t];
 } Queue_t;
-
     
 bool isEmpty(Queue_t q){
     return q.size &lt; 0;
@@ -190,7 +226,7 @@ Node_t getLast(Queue_t q)
     return q.queue[q.rear];
 }
 
-void insert(Node_t value, Queue_t q)    // add a node according to its priority
+int insert(Node_t value, Queue_t &amp;q)    // add a node according to its priority
 {
     int i = 0;
     bool found = false;
@@ -214,14 +250,16 @@ void insert(Node_t value, Queue_t q)    // add a node according to its priority
             q.queue[i] = value;
             q.size++;
         }
+        return 0;
     }
     else
     {
         // Queue is full
+        return -1;
     }
 }
 
-void enqueue(Node_t value, Queue_t q)    // add a node at the end of the queue
+int enqueue(Node_t value, Queue_t &amp;q)    // add a node at the end of the queue
 {
     if(q.size &lt; number_UE)
     {
@@ -243,10 +281,12 @@ void enqueue(Node_t value, Queue_t q)    // add a node at the end of the queue
             q.rear++;
             q.size++;
         }
+        return 0;
     }
     else
     {
         // Queue is full
+        return -1;
     }
 }
 
@@ -268,6 +308,7 @@ int pop(Queue_t q)
 
 int dequeue(Queue_t q)
 {
+
     if(isEmpty(q))
     {
         // Queue is empty
@@ -290,32 +331,57 @@ broadcast chan schedule[BSid_t];    // BS signal to execute radio resource sched
 
 broadcast chan scheduled[BSid_t];    // RRM signal to BS that scheduling is done
 
-Queue_t priority_queue = {-1, -1, -1, {{-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}}};    // Queue of active devices with profiles RTa, hqRTa and sRTA
+Queue_t priority_queue[BSid_t] =    // Queue of active devices with profiles RTa, hqRTa and sRTA
+{
+    {-1, -1, -1, {{-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}}},
+    {-1, -1, -1, {{-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}}}
+};
 
-Queue_t request_queue = {-1, -1, -1, {{-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}}};    // Queue of active devices in connected and Listen-Only modes
+Queue_t request_queue[BSid_t] =    // Queue of active devices in connected and Listen-Only modes
+{
+    {-1, -1, -1, {{-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}}},
+    {-1, -1, -1, {{-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}}}
+};
 
-void add_UE(UEid_t id)
+// FUNCTIONS ----------------------------------------------------------------------------------
+
+void add_UE(BSid_t bs, UEid_t id)
 {
     if(profile[id] == initial || profile[id] == Listen_Only)
     {
         Node_t new_node = {-1, id};
-        enqueue(new_node, request_queue);
+        enqueue(new_node, request_queue[bs]);
     }
     else
     {
         Node_t new_node = {profile[id], id};
-        insert(new_node, priority_queue);
+        insert(new_node, priority_queue[bs]);
     }
 }
 
+// --------------------------------------------------------------------------------------------
+// INITIAL CASE
+// Static and equal slot size for all nodes
+// A beacon slot of static size in the end of the frame
+// --------------------------------------------------------------------------------------------
 
+profileId_t static_profile[UEid_t] = {3, 3, 3, 3, 3, 3, 3, 1, 1, 1};
 
+int static_slot_start[UEid_t] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0};    // start times of dedicated TCH slots for the nodes in current frame
 
+int static_slot_size[UEid_t] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0};    // sizes of dedicated TCH slots for the nodes in current frame (ms * unit)
 
+// --------------------------------------------------------------------------------------------
+// ACKs ENABLED
+// Re-transmission only happens when ACK is not received
+// Nodes can turn off RF for half of the frame
+// --------------------------------------------------------------------------------------------
 
-
-
-
+// --------------------------------------------------------------------------------------------
+// MCS
+// BS can assign different modulation schemes to transfer more data with the same slot duration
+// It must consider QoS and CQI (most of all) to evaluate efficiency    
+// --------------------------------------------------------------------------------------------
 </declaration>
 	<template>
 		<name>Scheduler</name>
@@ -385,22 +451,18 @@ bool retransmission = false;</declaration>
 		</location>
 		<location id="id4" x="-76" y="-76">
 			<name x="-127" y="-110">FRAME_READY</name>
+			<label kind="invariant" x="-102" y="-68">x' == 0</label>
 		</location>
 		<location id="id5" x="85" y="-76">
 			<name x="51" y="-161">SEND_BCH</name>
 			<label kind="invariant" x="51" y="-136">x' == 1 &amp;&amp;
 x &lt;= BCH_duration</label>
-			<urgent/>
 		</location>
 		<location id="id6" x="85" y="102">
-			<name x="102" y="85">WAIT_UL</name>
-			<label kind="invariant" x="170" y="85">x' == 1 &amp;&amp;
-x &lt;= slot_size[slot]</label>
-			<urgent/>
+			<name x="102" y="68">WAIT_UL</name>
+			<label kind="invariant" x="102" y="85">x &lt;= slot_size[slot]</label>
 		</location>
 		<location id="id7" x="-374" y="-76">
-			<name x="-442" y="-85">SETUP</name>
-			<label kind="invariant" x="-442" y="-68">x' == 0</label>
 			<urgent/>
 		</location>
 		<location id="id8" x="-34" y="230">
@@ -427,10 +489,12 @@ x &lt;= slot_size[slot]</label>
 		<transition>
 			<source ref="id12"/>
 			<target ref="id4"/>
+			<label kind="synchronisation" x="-187" y="-76">schedule[id]!</label>
 		</transition>
 		<transition>
 			<source ref="id11"/>
 			<target ref="id4"/>
+			<label kind="synchronisation" x="-297" y="-153">schedule[id]!</label>
 			<nail x="-76" y="-127"/>
 		</transition>
 		<transition>
@@ -446,12 +510,11 @@ x &lt;= slot_size[slot]</label>
 		<transition>
 			<source ref="id10"/>
 			<target ref="id7"/>
-			<label kind="guard" x="-518" y="-17">slot &gt;= number_slots</label>
-			<label kind="synchronisation" x="-467" y="-34">schedule[id]!</label>
-			<label kind="assignment" x="-518" y="0">retransmission = !retransmission,
+			<label kind="guard" x="-510" y="-51">slot &gt;= number_slots</label>
+			<label kind="assignment" x="-510" y="-34">x = 0,
 slot = 0,
 number_slots = 0,
-x = 0</label>
+retransmission = !retransmission</label>
 			<nail x="-374" y="0"/>
 		</transition>
 		<transition>
@@ -473,7 +536,7 @@ x = 0</label>
 			<target ref="id10"/>
 			<label kind="assignment" x="-195" y="229">ACK[current] = 1,
 RACH_id = -1,
-add_UE(id)</label>
+add_UE(id, current)</label>
 			<nail x="-195" y="230"/>
 		</transition>
 		<transition>
@@ -589,7 +652,6 @@ z &lt;= disconnect_timeout</label>
 		<location id="id23" x="-544" y="-561">
 			<name x="-527" y="-569">SLEEP</name>
 			<label kind="invariant" x="-527" y="-553">y &lt;= sleep_time[id]</label>
-			<urgent/>
 		</location>
 		<location id="id24" x="-850" y="-561">
 			<label kind="invariant" x="-875" y="-544">y' == 0</label>
@@ -694,13 +756,35 @@ ACK[id] = 0</label>
 	<template>
 		<name>UserJoined</name>
 		<parameter>int id</parameter>
-		<declaration>clock x;
+		<declaration>// --------------------------------------------------------------------------------------------
+// CONSTANTS
+// --------------------------------------------------------------------------------------------
 
-clock y;
+// --------------------------------------------------------------------------------------------
+// VARIABLES
+// --------------------------------------------------------------------------------------------
 
-clock z;
+clock x;    // transmission timer
+clock y;    // sleep timer
+clock z;    // disconnect timer
 
-int prob_success = 1;</declaration>
+int prob_success;
+int prob_failure;
+
+// --------------------------------------------------------------------------------------------
+// FUNCTIONS
+// --------------------------------------------------------------------------------------------
+
+void getProbability()
+{
+    prob_failure = channel_interference_probability[id][0];
+    prob_success = channel_interference_probability[id][1];
+}
+
+// --------------------------------------------------------------------------------------------
+// TODO
+// --------------------------------------------------------------------------------------------
+</declaration>
 		<location id="id26" x="246" y="552">
 			<name x="204" y="569">STREAM</name>
 		</location>
@@ -747,7 +831,6 @@ y' == 0</label>
 		<location id="id36" x="476" y="357">
 			<name x="451" y="374">SLEEP</name>
 			<label kind="invariant" x="434" y="391">y &lt;= sleep_time[id]</label>
-			<urgent/>
 		</location>
 		<location id="id37" x="306" y="552">
 			<name x="289" y="569">LISTEN</name>
@@ -873,14 +956,37 @@ ACK[id] = 0</label>
 	</template>
 	<template>
 		<name>UserStates</name>
-		<parameter>int id</parameter>
-		<declaration>clock offset;    // timer for start offset
+		<parameter>int id, int start_offset</parameter>
+		<declaration>// --------------------------------------------------------------------------------------------
+// CONSTANTS
+// --------------------------------------------------------------------------------------------
 
-int state_id = 0;    // 1 - Listen-Only, 2 - Streaming</declaration>
-		<location id="id40" x="-15130" y="-15181">
-			<name x="-15138" y="-15249">INIT</name>
-			<label kind="invariant" x="-15181" y="-15232">offset' == 1 &amp;&amp;
-offset &lt;= start_offset[id]</label>
+// --------------------------------------------------------------------------------------------
+// VARIABLES
+// --------------------------------------------------------------------------------------------
+
+clock offset;    // start offset timer
+
+int mode = 0;    // 1 - Listen Only, 2 - Streaming
+
+// --------------------------------------------------------------------------------------------
+// FUNCTIONS
+// --------------------------------------------------------------------------------------------
+
+int getOffset()
+{
+    if(start_offset == -1) {
+        setOffset();
+        return start_offsets[id];
+    }
+    else
+    {
+        return start_offset;
+    }
+    return 0;
+}</declaration>
+		<location id="id40" x="-15130" y="-15266">
+			<name x="-15138" y="-15300">INIT</name>
 		</location>
 		<location id="id41" x="-15130" y="-14942">
 			<name x="-15240" y="-14943">LISTEN_ONLY</name>
@@ -895,15 +1001,26 @@ offset &lt;= start_offset[id]</label>
 		<location id="id44" x="-14985" y="-14815">
 			<name x="-15019" y="-14849">SLEEPING</name>
 		</location>
-		<location id="id45" x="-14832" y="-15181">
-			<name x="-14815" y="-15190">DISCONNECTED</name>
+		<location id="id45" x="-14832" y="-15266">
+			<name x="-14815" y="-15275">DISCONNECTED</name>
 			<urgent/>
 		</location>
 		<location id="id46" x="-15130" y="-15096">
 			<name x="-15240" y="-15113">CONNECTING</name>
 			<label kind="invariant" x="-15223" y="-15096">offset' == 0</label>
 		</location>
+		<location id="id47" x="-15130" y="-15189">
+			<name x="-15172" y="-15198">ON</name>
+			<label kind="invariant" x="-15113" y="-15206">offset' == 1 &amp;&amp;
+offset &lt;= start_offset</label>
+		</location>
 		<init ref="id40"/>
+		<transition>
+			<source ref="id47"/>
+			<target ref="id46"/>
+			<label kind="guard" x="-15121" y="-15155">offset &gt;= start_offset</label>
+			<label kind="synchronisation" x="-15121" y="-15138">started[id]!</label>
+		</transition>
 		<transition>
 			<source ref="id46"/>
 			<target ref="id45"/>
@@ -914,24 +1031,25 @@ offset &lt;= start_offset[id]</label>
 			<source ref="id46"/>
 			<target ref="id41"/>
 			<label kind="synchronisation" x="-15232" y="-15028">connected[id]?</label>
+			<label kind="assignment" x="-15198" y="-15011">mode = 1</label>
 		</transition>
 		<transition>
 			<source ref="id43"/>
 			<target ref="id41"/>
-			<label kind="guard" x="-15104" y="-14994">state_id == 1</label>
+			<label kind="guard" x="-15104" y="-14994">mode == 1</label>
 		</transition>
 		<transition>
 			<source ref="id41"/>
 			<target ref="id45"/>
-			<label kind="synchronisation" x="-15266" y="-15291">disconnected[id]?</label>
+			<label kind="synchronisation" x="-15266" y="-15342">disconnected[id]?</label>
 			<nail x="-15266" y="-14943"/>
-			<nail x="-15266" y="-15265"/>
-			<nail x="-14832" y="-15265"/>
+			<nail x="-15266" y="-15316"/>
+			<nail x="-14832" y="-15316"/>
 		</transition>
 		<transition>
 			<source ref="id45"/>
 			<target ref="id40"/>
-			<label kind="assignment" x="-14926" y="-15181">offset = 0</label>
+			<label kind="assignment" x="-14926" y="-15266">offset = 0</label>
 		</transition>
 		<transition>
 			<source ref="id42"/>
@@ -941,19 +1059,19 @@ offset &lt;= start_offset[id]</label>
 		<transition>
 			<source ref="id43"/>
 			<target ref="id42"/>
-			<label kind="guard" x="-14951" y="-14994">state_id == 2</label>
+			<label kind="guard" x="-14951" y="-14994">mode == 2</label>
 		</transition>
 		<transition>
 			<source ref="id44"/>
 			<target ref="id42"/>
-			<label kind="guard" x="-14943" y="-14883">state_id == 2</label>
+			<label kind="guard" x="-14943" y="-14883">mode == 2</label>
 			<label kind="synchronisation" x="-14943" y="-14866">wake_up[id]?</label>
 			<nail x="-14858" y="-14849"/>
 		</transition>
 		<transition>
 			<source ref="id44"/>
 			<target ref="id41"/>
-			<label kind="guard" x="-15096" y="-14883">state_id == 1</label>
+			<label kind="guard" x="-15096" y="-14883">mode == 1</label>
 			<label kind="synchronisation" x="-15096" y="-14866">wake_up[id]?</label>
 			<nail x="-15104" y="-14849"/>
 		</transition>
@@ -961,28 +1079,24 @@ offset &lt;= start_offset[id]</label>
 			<source ref="id42"/>
 			<target ref="id44"/>
 			<label kind="synchronisation" x="-14900" y="-14832">sleep[id]?</label>
-			<label kind="assignment" x="-14917" y="-14815">state_id = 2</label>
 			<nail x="-14832" y="-14815"/>
 		</transition>
 		<transition>
 			<source ref="id41"/>
 			<target ref="id44"/>
 			<label kind="synchronisation" x="-15112" y="-14832">sleep[id]?</label>
-			<label kind="assignment" x="-15112" y="-14815">state_id = 1</label>
 			<nail x="-15130" y="-14815"/>
 		</transition>
 		<transition>
 			<source ref="id41"/>
 			<target ref="id43"/>
 			<label kind="synchronisation" x="-15087" y="-15045">failed[id]?</label>
-			<label kind="assignment" x="-15104" y="-15028">state_id = 1</label>
 			<nail x="-15104" y="-15028"/>
 		</transition>
 		<transition>
 			<source ref="id42"/>
 			<target ref="id43"/>
 			<label kind="synchronisation" x="-14926" y="-15045">failed[id]?</label>
-			<label kind="assignment" x="-14934" y="-15028">state_id = 2</label>
 			<nail x="-14858" y="-15028"/>
 		</transition>
 		<transition>
@@ -996,105 +1110,126 @@ offset &lt;= start_offset[id]</label>
 			<source ref="id41"/>
 			<target ref="id42"/>
 			<label kind="synchronisation" x="-15028" y="-14960">stream[id]?</label>
+			<label kind="assignment" x="-15028" y="-14943">mode = 2</label>
 		</transition>
 		<transition>
 			<source ref="id40"/>
-			<target ref="id46"/>
-			<label kind="guard" x="-15121" y="-15164">offset &gt;= start_offset[id]</label>
-			<label kind="synchronisation" x="-15121" y="-15147">started[id]!</label>
-			<label kind="assignment" x="-15121" y="-15130">offset = 0</label>
+			<target ref="id47"/>
+			<label kind="assignment" x="-15121" y="-15257">offset = 0,
+start_offset = getOffset()</label>
 		</transition>
 	</template>
 	<template>
 		<name>UserConnect</name>
 		<parameter>int id</parameter>
-		<declaration>int i = 0;    // channel scan counter
+		<declaration>// --------------------------------------------------------------------------------------------
+// CONSTANTS
+// --------------------------------------------------------------------------------------------
 
+const int number_channels = 10;    // number of hard-coded channel frequencies to scan through
+
+const double channels[number_channels] = {1.5, 1.8, 2.0, 2.2, 2.3, 2.4, 3.1, 3.5, 4.2, 5.0};    // channel frequencies (MHz) to scan for BS down-link reception
+
+const int channel_stability_latency = 1 * unit;    // time to test channel stability before connecting to the BS
+
+const int number_retries = 10;    // number of allowed retries of channel scanning before going to the INITIAL state
+
+// --------------------------------------------------------------------------------------------
+// VARIABLES
+// --------------------------------------------------------------------------------------------
+
+int i = 0;    // channel scan counter
 int j = 0;    // re-try scan counter
 
-int number_channels = 10;    // number of hard-coded channels to scan through
+clock x;    // general usage timer
 
-int channels[10] = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9};    // channel frequencies to scan for BS down-link reception
+int prob_stable;
+int prob_unstable;
 
-int channel_stability_latency = 0;    // time to test channel stability before connecting to the BS as LISTEN_ONLY UE
+// --------------------------------------------------------------------------------------------
+// VARIABLES
+// --------------------------------------------------------------------------------------------
 
-clock x;
+void getProbability()
+{
+    prob_unstable = connection_channel_stability[id][0];
+    prob_stable = connection_channel_stability[id][1];   
+}
 
-// int prob_stable = connection_channel_stability[id][1];
-int prob_stable = 100;
+// --------------------------------------------------------------------------------------------
+// TODO
+// Channel stability should be dependent on the system topology - distance from the UE to the BS
+// --------------------------------------------------------------------------------------------
 
-// int prob_unstable = connection_channel_stability[id][0];
-int prob_unstable = 0;
-
-int number_retries = 10;    // number of allowed retries of channel scanning before going to the INITIAL state</declaration>
-		<location id="id47" x="-2856" y="-3111">
+</declaration>
+		<location id="id48" x="-2856" y="-3111">
 			<name x="-2915" y="-3136">INITIAL</name>
 		</location>
-		<location id="id48" x="-2856" y="-2813">
+		<location id="id49" x="-2856" y="-2813">
 			<name x="-2839" y="-2830">TESTING_CHANNEL</name>
 			<label kind="invariant" x="-2839" y="-2813">x &lt;= channel_stability_latency</label>
 		</location>
-		<location id="id49" x="-2856" y="-2983">
+		<location id="id50" x="-2856" y="-2983">
 			<name x="-2941" y="-3009">SCANNING</name>
 			<urgent/>
 		</location>
-		<location id="id50" x="-2371" y="-3145">
+		<location id="id51" x="-2371" y="-3145">
 			<name x="-2405" y="-3178">CONNECTED</name>
 			<urgent/>
 		</location>
-		<location id="id51" x="-2575" y="-2652">
+		<location id="id52" x="-2575" y="-2652">
 			<name x="-2618" y="-2703">WAIT_BCH</name>
 			<label kind="invariant" x="-2652" y="-2686">x &lt;= disconnect_timeout</label>
 		</location>
-		<location id="id52" x="-2575" y="-2507">
+		<location id="id53" x="-2575" y="-2507">
 			<name x="-2609" y="-2490">TRANSMIT</name>
 			<label kind="invariant" x="-2618" y="-2473">x &lt;= RACH_size</label>
 		</location>
-		<location id="id53" x="-2371" y="-2652">
+		<location id="id54" x="-2371" y="-2652">
 			<name x="-2354" y="-2660">BCH_RECEIVED</name>
 			<urgent/>
 		</location>
-		<location id="id54" x="-2371" y="-2507">
+		<location id="id55" x="-2371" y="-2507">
 			<label kind="invariant" x="-2354" y="-2516">x &lt;= RACH_start</label>
 		</location>
-		<branchpoint id="id55" x="-2856" y="-2652">
+		<branchpoint id="id56" x="-2856" y="-2652">
 		</branchpoint>
-		<init ref="id47"/>
+		<init ref="id48"/>
 		<transition>
-			<source ref="id52"/>
-			<target ref="id51"/>
+			<source ref="id53"/>
+			<target ref="id52"/>
 			<label kind="guard" x="-2728" y="-2550">x &gt;= RACH_size</label>
 			<label kind="assignment" x="-2728" y="-2533">x = 0</label>
 			<nail x="-2737" y="-2507"/>
 			<nail x="-2737" y="-2609"/>
 		</transition>
 		<transition>
-			<source ref="id54"/>
-			<target ref="id52"/>
+			<source ref="id55"/>
+			<target ref="id53"/>
 			<label kind="guard" x="-2524" y="-2507">x &gt;= RACH_start</label>
 		</transition>
 		<transition>
-			<source ref="id51"/>
-			<target ref="id53"/>
+			<source ref="id52"/>
+			<target ref="id54"/>
 			<label kind="guard" x="-2550" y="-2652">x &lt;= disconnect_timeout</label>
 			<label kind="synchronisation" x="-2490" y="-2677">BCH?</label>
 			<nail x="-2567" y="-2652"/>
 		</transition>
 		<transition>
-			<source ref="id51"/>
-			<target ref="id47"/>
+			<source ref="id52"/>
+			<target ref="id48"/>
 			<label kind="guard" x="-2567" y="-3094">x &gt;= disconnect_timeout</label>
 			<label kind="synchronisation" x="-2567" y="-3111">disconnected[id]!</label>
 			<nail x="-2575" y="-3111"/>
 		</transition>
 		<transition>
-			<source ref="id53"/>
-			<target ref="id50"/>
+			<source ref="id54"/>
+			<target ref="id51"/>
 			<label kind="guard" x="-2363" y="-2779">ACK[id] == 1</label>
 		</transition>
 		<transition>
-			<source ref="id52"/>
-			<target ref="id51"/>
+			<source ref="id53"/>
+			<target ref="id52"/>
 			<label kind="guard" x="-2567" y="-2626">x &lt;= RACH_size &amp;&amp;
 RACH_id == -1</label>
 			<label kind="synchronisation" x="-2567" y="-2584">RACH!</label>
@@ -1102,21 +1237,21 @@ RACH_id == -1</label>
 x = 0</label>
 		</transition>
 		<transition>
-			<source ref="id53"/>
-			<target ref="id54"/>
+			<source ref="id54"/>
+			<target ref="id55"/>
 			<label kind="guard" x="-2363" y="-2626">ACK[id] == 0</label>
 			<label kind="assignment" x="-2363" y="-2601">x = 0</label>
 		</transition>
 		<transition>
-			<source ref="id50"/>
-			<target ref="id47"/>
+			<source ref="id51"/>
+			<target ref="id48"/>
 			<label kind="synchronisation" x="-2643" y="-3187">connected[id]!</label>
 			<label kind="assignment" x="-2643" y="-3170">ACK[id] = 0</label>
 			<nail x="-2856" y="-3145"/>
 		</transition>
 		<transition>
-			<source ref="id49"/>
-			<target ref="id49"/>
+			<source ref="id50"/>
+			<target ref="id50"/>
 			<label kind="guard" x="-2745" y="-2983">i &gt;= number_channels &amp;&amp;
 j &lt; number_retries</label>
 			<label kind="assignment" x="-2745" y="-2949">i = 0,
@@ -1125,8 +1260,8 @@ j++</label>
 			<nail x="-2754" y="-2907"/>
 		</transition>
 		<transition>
-			<source ref="id49"/>
-			<target ref="id47"/>
+			<source ref="id50"/>
+			<target ref="id48"/>
 			<label kind="guard" x="-3060" y="-3119">j &gt;= number_retries</label>
 			<label kind="synchronisation" x="-3060" y="-3102">disconnected[id]!</label>
 			<label kind="assignment" x="-3060" y="-3085">i = 0,
@@ -1134,8 +1269,8 @@ j = 0</label>
 			<nail x="-2932" y="-3112"/>
 		</transition>
 		<transition>
-			<source ref="id49"/>
-			<target ref="id49"/>
+			<source ref="id50"/>
+			<target ref="id50"/>
 			<label kind="guard" x="-3111" y="-2983">channels[i] != broadcast_channel &amp;&amp;
 i &lt; number_channels</label>
 			<label kind="assignment" x="-3111" y="-2949">i++</label>
@@ -1143,27 +1278,28 @@ i &lt; number_channels</label>
 			<nail x="-3120" y="-2864"/>
 		</transition>
 		<transition>
-			<source ref="id49"/>
-			<target ref="id48"/>
+			<source ref="id50"/>
+			<target ref="id49"/>
 			<label kind="guard" x="-2847" y="-2898">channels[i] == broadcast_channel</label>
 			<label kind="assignment" x="-2847" y="-2881">x = 0</label>
 		</transition>
 		<transition>
-			<source ref="id55"/>
-			<target ref="id51"/>
+			<source ref="id56"/>
+			<target ref="id52"/>
 			<label kind="assignment" x="-2839" y="-2652">i = 0,
 j = 0,
 x = 0</label>
 			<label kind="probability" x="-2839" y="-2669">prob_stable</label>
 		</transition>
 		<transition>
-			<source ref="id48"/>
-			<target ref="id55"/>
+			<source ref="id49"/>
+			<target ref="id56"/>
 			<label kind="guard" x="-2847" y="-2762">x &gt;= channel_stability_latency</label>
+			<label kind="assignment" x="-2847" y="-2745">getProbability()</label>
 		</transition>
 		<transition>
-			<source ref="id47"/>
-			<target ref="id49"/>
+			<source ref="id48"/>
+			<target ref="id50"/>
 			<label kind="synchronisation" x="-2847" y="-3103">started[id]?</label>
 			<label kind="assignment" x="-2847" y="-3086">i = 0,
 j = 0</label>
@@ -1183,171 +1319,171 @@ int disconnect_timeout;    // time of no DL received before disconnecting (e.g.,
 int latency;    // passable latency for UTCH audio transmission
 
 int qca_latency;</declaration>
-		<location id="id56" x="-1309" y="-935">
+		<location id="id57" x="-1309" y="-935">
 			<name x="-1334" y="-969">INITIAL</name>
 		</location>
-		<location id="id57" x="-1156" y="-638">
+		<location id="id58" x="-1156" y="-638">
 			<name x="-1241" y="-638">WAIT_BCH</name>
 			<label kind="invariant" x="-1215" y="-620">y' == 1</label>
 		</location>
-		<location id="id58" x="-1020" y="-578">
+		<location id="id59" x="-1020" y="-578">
 			<name x="-1003" y="-587">FAILED</name>
 			<urgent/>
 		</location>
-		<location id="id59" x="-1504" y="-935">
+		<location id="id60" x="-1504" y="-935">
 			<name x="-1615" y="-943">DISCONNECT</name>
 			<label kind="invariant" x="-1572" y="-926">y' == 0</label>
 			<urgent/>
 		</location>
-		<location id="id60" x="-1156" y="-935">
+		<location id="id61" x="-1156" y="-935">
 		</location>
-		<location id="id61" x="-994" y="-935">
+		<location id="id62" x="-994" y="-935">
 			<name x="-977" y="-960">LOAD_FROM_MEM</name>
 			<label kind="invariant" x="-977" y="-943">x &lt;= dma_latency</label>
 		</location>
-		<location id="id62" x="-841" y="-1020">
+		<location id="id63" x="-841" y="-1020">
 			<name x="-892" y="-1071">WAIT_SAMPLE</name>
 			<label kind="invariant" x="-892" y="-1054">y &lt; slot_start[id]</label>
 		</location>
-		<location id="id63" x="-1156" y="-748">
+		<location id="id64" x="-1156" y="-748">
 			<name x="-1249" y="-765">TRANSMIT</name>
 			<label kind="invariant" x="-1343" y="-748">x &lt;= transmission_latency</label>
 		</location>
-		<location id="id64" x="-1402" y="-739">
+		<location id="id65" x="-1402" y="-739">
 			<name x="-1470" y="-747">UL_ACK</name>
 			<urgent/>
 		</location>
-		<location id="id65" x="-1402" y="-816">
+		<location id="id66" x="-1402" y="-816">
 			<name x="-1462" y="-824">SLEEP</name>
 			<label kind="invariant" x="-1538" y="-807">y &lt;= sleep_time[id]</label>
 		</location>
-		<location id="id66" x="-1037" y="-748">
+		<location id="id67" x="-1037" y="-748">
 			<name x="-1045" y="-782">UL_NACK</name>
 			<urgent/>
 		</location>
-		<location id="id67" x="-1156" y="-536">
+		<location id="id68" x="-1156" y="-536">
 			<name x="-1207" y="-519">BCH_RECEIVED</name>
 			<urgent/>
 		</location>
-		<location id="id68" x="-1156" y="-824">
+		<location id="id69" x="-1156" y="-824">
 			<name x="-1283" y="-841">QCA_PROCESS</name>
 			<label kind="invariant" x="-1283" y="-824">y &lt;= qca_latency</label>
 		</location>
-		<init ref="id56"/>
+		<init ref="id57"/>
 		<transition>
-			<source ref="id68"/>
-			<target ref="id63"/>
+			<source ref="id69"/>
+			<target ref="id64"/>
 			<label kind="guard" x="-1147" y="-807">y &gt; qca_latency</label>
 			<label kind="assignment" x="-1147" y="-790">x = 0</label>
 		</transition>
 		<transition>
-			<source ref="id57"/>
-			<target ref="id67"/>
+			<source ref="id58"/>
+			<target ref="id68"/>
 			<label kind="synchronisation" x="-1198" y="-587">BCH?</label>
 		</transition>
 		<transition>
-			<source ref="id66"/>
-			<target ref="id63"/>
+			<source ref="id67"/>
+			<target ref="id64"/>
 		</transition>
 		<transition>
-			<source ref="id67"/>
-			<target ref="id66"/>
+			<source ref="id68"/>
+			<target ref="id67"/>
 			<label kind="guard" x="-1028" y="-536">ACK[id] == 0</label>
 			<nail x="-926" y="-536"/>
 			<nail x="-926" y="-748"/>
 		</transition>
 		<transition>
-			<source ref="id65"/>
-			<target ref="id60"/>
+			<source ref="id66"/>
+			<target ref="id61"/>
 			<label kind="guard" x="-1402" y="-910">y &gt; sleep_time[id]</label>
 			<nail x="-1402" y="-884"/>
 			<nail x="-1207" y="-884"/>
 		</transition>
 		<transition>
-			<source ref="id64"/>
-			<target ref="id65"/>
+			<source ref="id65"/>
+			<target ref="id66"/>
 			<label kind="assignment" x="-1445" y="-782">y = 0</label>
 		</transition>
 		<transition>
-			<source ref="id67"/>
-			<target ref="id64"/>
+			<source ref="id68"/>
+			<target ref="id65"/>
 			<label kind="guard" x="-1394" y="-535">ACK[id] == 1</label>
 			<nail x="-1402" y="-535"/>
 		</transition>
 		<transition>
-			<source ref="id63"/>
-			<target ref="id57"/>
+			<source ref="id64"/>
+			<target ref="id58"/>
 			<label kind="guard" x="-1317" y="-705">x &gt; transmission_latency</label>
 			<label kind="synchronisation" x="-1224" y="-722">UTCH[id]!</label>
 		</transition>
 		<transition>
-			<source ref="id62"/>
-			<target ref="id68"/>
+			<source ref="id63"/>
+			<target ref="id69"/>
 			<label kind="guard" x="-952" y="-824">y &gt;= slot_start[id]</label>
 			<label kind="assignment" x="-884" y="-807">y = 0</label>
 			<nail x="-841" y="-824"/>
 		</transition>
 		<transition>
-			<source ref="id60"/>
-			<target ref="id68"/>
+			<source ref="id61"/>
+			<target ref="id69"/>
 			<label kind="guard" x="-1266" y="-884">y &gt;= slot_start[id]</label>
 			<label kind="assignment" x="-1190" y="-867">y = 0</label>
 		</transition>
 		<transition>
-			<source ref="id61"/>
-			<target ref="id60"/>
+			<source ref="id62"/>
+			<target ref="id61"/>
 			<label kind="guard" x="-1105" y="-901">x &gt; dma_latency</label>
 			<nail x="-994" y="-875"/>
 			<nail x="-1105" y="-875"/>
 		</transition>
 		<transition>
-			<source ref="id62"/>
-			<target ref="id61"/>
+			<source ref="id63"/>
+			<target ref="id62"/>
 			<label kind="synchronisation" x="-994" y="-1003">sample_ready[id]?</label>
 			<nail x="-875" y="-977"/>
 			<nail x="-994" y="-977"/>
 		</transition>
 		<transition>
-			<source ref="id60"/>
-			<target ref="id62"/>
+			<source ref="id61"/>
+			<target ref="id63"/>
 			<label kind="guard" x="-1156" y="-1062">samples_ready[id] == 0 &amp;&amp;
 y &lt; slot_start[id]</label>
 			<nail x="-1156" y="-1020"/>
 		</transition>
 		<transition>
-			<source ref="id60"/>
-			<target ref="id61"/>
+			<source ref="id61"/>
+			<target ref="id62"/>
 			<label kind="guard" x="-1130" y="-960">y &lt; slot_start[id]</label>
 			<label kind="assignment" x="-1130" y="-935">x = 0</label>
 		</transition>
 		<transition>
-			<source ref="id59"/>
-			<target ref="id56"/>
+			<source ref="id60"/>
+			<target ref="id57"/>
 			<label kind="synchronisation" x="-1462" y="-960">disconnected[id]!</label>
 		</transition>
 		<transition>
-			<source ref="id57"/>
-			<target ref="id59"/>
+			<source ref="id58"/>
+			<target ref="id60"/>
 			<label kind="guard" x="-1504" y="-637">y &gt; disconnect_timeout</label>
 			<label kind="assignment" x="-1504" y="-620">y = 0</label>
 			<nail x="-1504" y="-637"/>
 		</transition>
 		<transition>
-			<source ref="id58"/>
-			<target ref="id57"/>
+			<source ref="id59"/>
+			<target ref="id58"/>
 			<label kind="synchronisation" x="-1105" y="-595">failed[id]!</label>
 			<nail x="-1113" y="-578"/>
 		</transition>
 		<transition>
-			<source ref="id57"/>
-			<target ref="id58"/>
+			<source ref="id58"/>
+			<target ref="id59"/>
 			<label kind="guard" x="-1011" y="-638">y &gt; max_lat &amp;&amp;
 y &lt;= disconnect_timeout</label>
 			<nail x="-1020" y="-638"/>
 		</transition>
 		<transition>
-			<source ref="id56"/>
-			<target ref="id60"/>
+			<source ref="id57"/>
+			<target ref="id61"/>
 			<label kind="synchronisation" x="-1266" y="-960">stream[id]?</label>
 			<label kind="assignment" x="-1266" y="-935">x = 0,
 y = 0</label>
@@ -1372,45 +1508,46 @@ clock x;
 //int time_per_sample = (audio_quality/bit_depth)/unit;    // samples per (ms * unit);
 int time_per_sample = 1;
 
-</declaration>
-		<location id="id69" x="-662" y="-654">
+// calculate number of samples
+// choose default MCS to get data rate (Mbps) that a radio transmits in</declaration>
+		<location id="id70" x="-662" y="-654">
 			<name x="-688" y="-722">SAMPLE</name>
 			<label kind="invariant" x="-688" y="-705">x' == 1 &amp;&amp;
 x &lt;= time_per_sample</label>
 		</location>
-		<location id="id70" x="-416" y="-654">
+		<location id="id71" x="-416" y="-654">
 			<name x="-484" y="-705">PROCESS_CODEC</name>
 			<label kind="invariant" x="-476" y="-688">x &lt;= codec_latency</label>
 		</location>
-		<location id="id71" x="-892" y="-654">
+		<location id="id72" x="-892" y="-654">
 			<name x="-918" y="-705">INITIAL</name>
 			<label kind="invariant" x="-918" y="-688">x' == 0</label>
 		</location>
-		<location id="id72" x="-416" y="-569">
+		<location id="id73" x="-416" y="-569">
 			<name x="-399" y="-578">LOAD_TO_MEM</name>
 			<label kind="invariant" x="-399" y="-561">x &lt;= dma_latency</label>
 		</location>
-		<location id="id73" x="-892" y="-569">
+		<location id="id74" x="-892" y="-569">
 			<name x="-986" y="-578">STOPPING</name>
 			<urgent/>
 		</location>
-		<init ref="id71"/>
+		<init ref="id72"/>
 		<transition>
-			<source ref="id69"/>
-			<target ref="id73"/>
+			<source ref="id70"/>
+			<target ref="id74"/>
 			<label kind="synchronisation" x="-850" y="-518">disconnected[id]?</label>
 			<nail x="-697" y="-518"/>
 			<nail x="-892" y="-518"/>
 		</transition>
 		<transition>
-			<source ref="id69"/>
-			<target ref="id73"/>
+			<source ref="id70"/>
+			<target ref="id74"/>
 			<label kind="synchronisation" x="-850" y="-569">stop_sample[id]?</label>
 			<nail x="-697" y="-569"/>
 		</transition>
 		<transition>
-			<source ref="id72"/>
-			<target ref="id69"/>
+			<source ref="id73"/>
+			<target ref="id70"/>
 			<label kind="guard" x="-629" y="-552">x &gt; dma_latency</label>
 			<label kind="synchronisation" x="-629" y="-569">sample_ready[id]!</label>
 			<label kind="assignment" x="-629" y="-535">samples_ready[id] += 1,
@@ -1418,31 +1555,31 @@ x = 0</label>
 			<nail x="-637" y="-569"/>
 		</transition>
 		<transition>
-			<source ref="id70"/>
-			<target ref="id72"/>
+			<source ref="id71"/>
+			<target ref="id73"/>
 			<label kind="guard" x="-408" y="-637">x &gt; codec_latency</label>
 			<label kind="assignment" x="-408" y="-620">x = 0</label>
 		</transition>
 		<transition>
-			<source ref="id73"/>
-			<target ref="id71"/>
+			<source ref="id74"/>
+			<target ref="id72"/>
 			<label kind="assignment" x="-926" y="-620">x = 0</label>
 		</transition>
 		<transition>
-			<source ref="id71"/>
-			<target ref="id69"/>
+			<source ref="id72"/>
+			<target ref="id70"/>
 			<label kind="synchronisation" x="-824" y="-680">sample[id]?</label>
 			<label kind="assignment" x="-824" y="-654">x = 0</label>
 		</transition>
 		<transition>
-			<source ref="id69"/>
-			<target ref="id70"/>
+			<source ref="id70"/>
+			<target ref="id71"/>
 			<label kind="guard" x="-620" y="-654">x &gt; time_per_sample</label>
 			<label kind="assignment" x="-620" y="-637">x = 0</label>
 		</transition>
 	</template>
 	<system>// Place template instantiations here.
-usr_1 = UserStates(0);
+usr_1 = UserStates(0, 5000);
 usr_1c = UserConnect(0);
 usr_1j = UserJoined(0);
 usr_1lt = UserListenOnly(0);
@@ -1452,7 +1589,7 @@ usr_1sm = UserSample(0, 192, 16, 10, 1);
 bs_1 = BaseStation(0);
 bs_1s = Scheduler(0);
 // List one or more processes to be composed into a system.
-system usr_1, usr_1c, usr_1j, usr_1lt, bs_1, bs_1s;
+system bs_1, bs_1s; //usr_1, usr_1c, usr_1j, usr_1lt, bs_1, bs_1s;
 //system usr_1, usr_1c, usr_1lt, bs_1, bs_1s;
 //, usr_1s, usr_1sm,  
     </system>
@@ -1490,7 +1627,11 @@ system usr_1, usr_1c, usr_1j, usr_1lt, bs_1, bs_1s;
 			<comment></comment>
 		</query>
 		<query>
-			<formula>A&lt;&gt; bs_1.SETUP</formula>
+			<formula>A&lt;&gt; bs_1.RETRANSMISSION</formula>
+			<comment></comment>
+		</query>
+		<query>
+			<formula>A&lt;&gt; bs_1.TRANSMISSION</formula>
 			<comment></comment>
 		</query>
 		<query>
