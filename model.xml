@@ -142,19 +142,7 @@ const int disconnect_timeout = 5000 * 1000 * unit;    // timeout for disconnect 
 // VARIABLES ----------------------------------------------------------------------------------
 
 // connection channel stability
-int connection_channel_stability[UEid_t][2] =
-{
-    {25, 75},
-    {25, 75},
-    {25, 75},
-    {25, 75},
-    {25, 75},
-    {25, 75},
-    {25, 75},
-    {25, 75},
-    {25, 75},
-    {25, 75}
-};
+int connection_channel_stability[UEid_t] = {75, 75, 75, 75, 75, 75, 75, 75, 75, 75};
 
 int RACH_slot[BSid_t] = {number_UE, number_UE};
 
@@ -185,19 +173,7 @@ broadcast chan UCCH[BSid_t][slotID_t];    // Up-Link control channel
 // VARIABLES ----------------------------------------------------------------------------------
 
 // initial channel interference probability
-int channel_interference_probability[UEid_t][2] =
-{
-    {25, 75},
-    {25, 75},
-    {25, 75},
-    {25, 75},
-    {25, 75},
-    {25, 75},
-    {25, 75},
-    {25, 75},
-    {25, 75},
-    {25, 75}
-};
+int channel_interference_probability[UEid_t] = {75, 75, 75, 75, 75, 75, 75, 75, 75, 75};
 
 // --------------------------------------------------------------------------------------------
 // TODO
@@ -953,7 +929,6 @@ UEid_t new;    // ID of current slot's owner (UE)
 
 int BCH_duration;
 
-int prob_failure;
 int prob_success;
 
 int uart_latency;
@@ -968,8 +943,7 @@ bool success[slotID_t] = {false, false, false, false, false, false, false, false
 
 void getProbability()
 {
-    prob_success = connection_channel_stability[bs][1];
-    prob_failure = connection_channel_stability[bs][0];
+    prob_success = connection_channel_stability[bs];
 }
 
 int getUARTTime()
@@ -1035,8 +1009,8 @@ int getDataType()
 			<urgent/>
 		</location>
 		<location id="id26" x="-842" y="-764">
-			<name x="-824" y="-756">GUARD</name>
-			<label kind="invariant" x="-824" y="-739">x' == 1 &amp;&amp;
+			<name x="-833" y="-799">GUARD</name>
+			<label kind="invariant" x="-824" y="-765">x' == 1 &amp;&amp;
 x &lt;= GI_size[bs]</label>
 		</location>
 		<location id="id27" x="-680" y="-850">
@@ -1071,6 +1045,13 @@ x &lt;= GI_size[bs]</label>
 		<branchpoint id="id34" x="-484" y="-765">
 		</branchpoint>
 		<init ref="id16"/>
+		<transition>
+			<source ref="id34"/>
+			<target ref="id26"/>
+			<label kind="probability" x="-688" y="-705">100 - prob_success</label>
+			<nail x="-484" y="-705"/>
+			<nail x="-714" y="-705"/>
+		</transition>
 		<transition>
 			<source ref="id33"/>
 			<target ref="id23"/>
@@ -1115,9 +1096,7 @@ profile[ue] == 0</label>
 			<source ref="id34"/>
 			<target ref="id26"/>
 			<label kind="synchronisation" x="-688" y="-748">BCH[channel]!</label>
-			<label kind="assignment" x="-688" y="-731">slot = 0,
-x = 0</label>
-			<label kind="probability" x="-688" y="-765">1</label>
+			<label kind="probability" x="-688" y="-765">prob_success</label>
 		</transition>
 		<transition>
 			<source ref="id28"/>
@@ -1216,7 +1195,9 @@ x = 0</label>
 			<source ref="id18"/>
 			<target ref="id34"/>
 			<label kind="guard" x="-450" y="-765">frame_clk[bs] &gt;= BCH_duration</label>
-			<label kind="assignment" x="-450" y="-748">getProbability()</label>
+			<label kind="assignment" x="-450" y="-748">getProbability(),
+slot = 0,
+x = 0</label>
 		</transition>
 		<transition>
 			<source ref="id17"/>
@@ -1251,7 +1232,6 @@ clock z;    // disconnect timer
 int bs;    // BS that this UE is connected to
 int channel;    // BS DL channel
 
-int prob_failure;
 int prob_success;
 
 int uart_latency;
@@ -1262,8 +1242,7 @@ int uart_latency;
 
 void getProbability()
 {
-    prob_failure = channel_interference_probability[id][0];
-    prob_success = channel_interference_probability[id][1];
+    prob_success = channel_interference_probability[id];
 }
 </declaration>
 		<location id="id35" x="-1836" y="-1495" color="#ffffff">
@@ -1321,6 +1300,12 @@ z &lt;= disconnect_timeout</label>
 		</branchpoint>
 		<init ref="id35"/>
 		<transition>
+			<source ref="id46"/>
+			<target ref="id39"/>
+			<label kind="probability" x="-1589" y="-1615">100 - prob_success</label>
+			<nail x="-1589" y="-1615"/>
+		</transition>
+		<transition>
 			<source ref="id36"/>
 			<target ref="id43"/>
 		</transition>
@@ -1333,15 +1318,15 @@ z &lt;= disconnect_timeout</label>
 		<transition>
 			<source ref="id46"/>
 			<target ref="id39"/>
-			<label kind="synchronisation" x="-1445" y="-1589">UCCH[bs][id]!</label>
-			<label kind="assignment" x="-1445" y="-1572">x = 0</label>
-			<label kind="probability" x="-1445" y="-1606">1</label>
+			<label kind="synchronisation" x="-1445" y="-1572">UCCH[bs][id]!</label>
+			<label kind="probability" x="-1445" y="-1589">prob_success</label>
 			<nail x="-1453" y="-1538"/>
 		</transition>
 		<transition>
 			<source ref="id42"/>
 			<target ref="id46"/>
-			<label kind="guard" x="-1605" y="-1658">x &gt;= slot_size[bs][id]/2</label>
+			<label kind="guard" x="-1598" y="-1666">x &gt;= slot_size[bs][id]/2</label>
+			<label kind="assignment" x="-1496" y="-1649">x = 0</label>
 		</transition>
 		<transition>
 			<source ref="id41"/>
@@ -1429,7 +1414,6 @@ const int qca_latency = 50;    // QCA processing time (in us)
 clock x;    // general utility timer
 
 int prob_success;
-int prob_failure;
 
 int bs;    // BS that this UE is connected to
 int channel;    // BS DL channel
@@ -1440,8 +1424,7 @@ int channel;    // BS DL channel
 
 void getProbability()
 {
-    prob_failure = channel_interference_probability[id][0];
-    prob_success = channel_interference_probability[id][1];
+    prob_success = channel_interference_probability[id];
 }
 
 // --------------------------------------------------------------------------------------------
@@ -1496,6 +1479,13 @@ void getProbability()
 		<branchpoint id="id59" x="484" y="93">
 		</branchpoint>
 		<init ref="id49"/>
+		<transition>
+			<source ref="id59"/>
+			<target ref="id52"/>
+			<label kind="probability" x="348" y="68">100 - prob_success</label>
+			<nail x="348" y="93"/>
+			<nail x="348" y="178"/>
+		</transition>
 		<transition>
 			<source ref="id58"/>
 			<target ref="id53"/>
@@ -1556,14 +1546,14 @@ static_profile[id] == HqRTa</label>
 		<transition>
 			<source ref="id59"/>
 			<target ref="id52"/>
-			<label kind="synchronisation" x="493" y="178">UCCH[bs][id]!</label>
-			<label kind="assignment" x="493" y="195">x = 0</label>
-			<label kind="probability" x="493" y="161">1</label>
+			<label kind="synchronisation" x="493" y="161">UCCH[bs][id]!</label>
+			<label kind="probability" x="493" y="144">prob_success</label>
 		</transition>
 		<transition>
 			<source ref="id54"/>
 			<target ref="id59"/>
 			<label kind="guard" x="510" y="93">x &gt;= slot_size[bs][id]/2</label>
+			<label kind="assignment" x="510" y="110">x = 0</label>
 		</transition>
 		<transition>
 			<source ref="id53"/>
@@ -1793,7 +1783,6 @@ int uart_latency = 0;
 bool transmitted;
 
 int prob_success;
-int prob_failure;
 
 // packet preparation time: QCA + DMA latencies
 // can use samples prepared from last successful transmission to (slot start time - preparation time)
@@ -1804,8 +1793,7 @@ int prob_failure;
 
 void getProbability()
 {
-    prob_success = channel_interference_probability[id][0];
-    prob_failure = channel_interference_probability[id][1];
+    prob_success = channel_interference_probability[id];
 }
 
 void isTransmitted()
@@ -1895,6 +1883,11 @@ x &lt;= getLatency(id)</label>
 		</branchpoint>
 		<init ref="id68"/>
 		<transition>
+			<source ref="id84"/>
+			<target ref="id81"/>
+			<label kind="probability" x="-1130" y="-680">100 - prob_success</label>
+		</transition>
+		<transition>
 			<source ref="id83"/>
 			<target ref="id75"/>
 			<label kind="guard" x="-518" y="-892">frame_clk[bs] + qca_latency &lt; slot_start[bs][id]</label>
@@ -1967,7 +1960,7 @@ channel = broadcast_channel[bs]</label>
 			<target ref="id80"/>
 			<label kind="synchronisation" x="-977" y="-713">UTCH[bs][id]!</label>
 			<label kind="assignment" x="-977" y="-697">transmitted = 1</label>
-			<label kind="probability" x="-977" y="-730">1</label>
+			<label kind="probability" x="-977" y="-730">prob_success</label>
 		</transition>
 		<transition>
 			<source ref="id77"/>
@@ -2064,10 +2057,7 @@ BSid_t bs;    // BS that this UE is connected to
 int channel;    // BS DL channel
 
 int prob_stable;
-int prob_unstable;
-
 int prob_success;
-int prob_failure;
 
 // --------------------------------------------------------------------------------------------
 // FUNCTIONS
@@ -2075,11 +2065,8 @@ int prob_failure;
 
 void getProbability()
 {
-    prob_unstable = connection_channel_stability[id][0];
-    prob_stable = connection_channel_stability[id][1];
-
-    prob_success = channel_interference_probability[id][0];
-    prob_failure = channel_interference_probability[id][1];
+    prob_stable = connection_channel_stability[id];
+    prob_success = channel_interference_probability[id];
 }
 
 bool checkChannel(int ch_id)
@@ -2129,8 +2116,8 @@ bool checkChannel(int ch_id)
 			<label kind="invariant" x="-3034" y="-2712">x &lt;= disconnect_timeout</label>
 		</location>
 		<location id="id90" x="-2958" y="-2473" color="#6c3483">
-			<name x="-3060" y="-2465">TRANSMIT</name>
-			<label kind="invariant" x="-3085" y="-2448">x &lt;= RACH_size[bs]/2</label>
+			<name x="-2992" y="-2448">TRANSMIT</name>
+			<label kind="invariant" x="-3026" y="-2431">x &lt;= RACH_size[bs]/2</label>
 		</location>
 		<location id="id91" x="-2720" y="-2677" color="#138d75">
 			<name x="-2704" y="-2693">BCH_ACK</name>
@@ -2152,23 +2139,31 @@ bool checkChannel(int ch_id)
 			<name x="-2941" y="-3102">DISCONNECT</name>
 			<urgent/>
 		</location>
-		<branchpoint id="id96" x="-2958" y="-2575">
+		<branchpoint id="id96" x="-2958" y="-2592">
 		</branchpoint>
 		<branchpoint id="id97" x="-3238" y="-2678">
 		</branchpoint>
 		<init ref="id85"/>
 		<transition>
+			<source ref="id96"/>
+			<target ref="id89"/>
+			<label kind="probability" x="-3111" y="-2618">100 - prob_success</label>
+			<nail x="-3119" y="-2592"/>
+			<nail x="-3119" y="-2618"/>
+		</transition>
+		<transition>
 			<source ref="id97"/>
 			<target ref="id93"/>
-			<label kind="probability" x="-3357" y="-2703">0</label>
-			<nail x="-3459" y="-2677"/>
-			<nail x="-3459" y="-2856"/>
+			<label kind="probability" x="-3400" y="-2703">100 - prob_stable</label>
+			<nail x="-3451" y="-2677"/>
+			<nail x="-3451" y="-2856"/>
 		</transition>
 		<transition>
 			<source ref="id96"/>
 			<target ref="id89"/>
-			<label kind="assignment" x="-2949" y="-2626">RACH_id[bs] = id</label>
-			<label kind="probability" x="-2949" y="-2643">prob_success</label>
+			<label kind="synchronisation" x="-2949" y="-2635">RACH[bs]!</label>
+			<label kind="assignment" x="-2949" y="-2618">RACH_id[bs] = id</label>
+			<label kind="probability" x="-2949" y="-2652">prob_success</label>
 		</transition>
 		<transition>
 			<source ref="id95"/>
@@ -2188,17 +2183,17 @@ bool checkChannel(int ch_id)
 		<transition>
 			<source ref="id90"/>
 			<target ref="id89"/>
-			<label kind="guard" x="-3153" y="-2524">x &gt;= RACH_size[bs] ||
+			<label kind="guard" x="-3128" y="-2533">x &gt;= RACH_size[bs] ||
 RACH_id[bs] != -1</label>
-			<label kind="assignment" x="-3153" y="-2490">x = 0</label>
-			<nail x="-3018" y="-2473"/>
-			<nail x="-3017" y="-2635"/>
+			<label kind="assignment" x="-3128" y="-2499">x = 0</label>
+			<nail x="-3136" y="-2473"/>
+			<nail x="-3136" y="-2635"/>
 		</transition>
 		<transition>
 			<source ref="id92"/>
 			<target ref="id90"/>
-			<label kind="guard" x="-2941" y="-2473">frame_clk[bs] &gt;= RACH_start[bs]</label>
-			<label kind="assignment" x="-2856" y="-2456">x = 0</label>
+			<label kind="guard" x="-2941" y="-2499">frame_clk[bs] &gt;= RACH_start[bs]</label>
+			<label kind="assignment" x="-2856" y="-2473">x = 0</label>
 		</transition>
 		<transition>
 			<source ref="id89"/>
@@ -2220,11 +2215,10 @@ RACH_id[bs] != -1</label>
 		<transition>
 			<source ref="id90"/>
 			<target ref="id96"/>
-			<label kind="guard" x="-2949" y="-2575">x &gt;= RACH_size[bs]/2 &amp;&amp;
+			<label kind="guard" x="-2949" y="-2558">x &gt;= RACH_size[bs]/2 &amp;&amp;
 RACH_id[bs] == -1</label>
-			<label kind="synchronisation" x="-2949" y="-2541">RACH[bs]!</label>
-			<label kind="assignment" x="-2950" y="-2524">x = 0</label>
-			<nail x="-2958" y="-2558"/>
+			<label kind="assignment" x="-2949" y="-2524">x = 0</label>
+			<nail x="-2958" y="-2575"/>
 		</transition>
 		<transition>
 			<source ref="id91"/>
@@ -2278,10 +2272,10 @@ checkChannel(i)</label>
 		<transition>
 			<source ref="id97"/>
 			<target ref="id89"/>
-			<label kind="assignment" x="-3128" y="-2677">i = 0,
+			<label kind="assignment" x="-3187" y="-2677">i = 0,
 j = 0,
 x = 0</label>
-			<label kind="probability" x="-3128" y="-2703">1</label>
+			<label kind="probability" x="-3187" y="-2703">prob_stable</label>
 		</transition>
 		<transition>
 			<source ref="id86"/>
@@ -2455,7 +2449,7 @@ system bs_1, bs_1clk, bs_1s, bs_1ip, bs_2, bs_2clk, bs_2s, bs_2ip, usr_1, usr_1s
 			<comment></comment>
 		</query>
 		<query>
-			<formula>simulate [&lt;= 400000; 1] {bs_2.channel, bs_2.prob_success, bs_2.prob_failure}</formula>
+			<formula>simulate [&lt;= 400000; 1] {bs_2.channel, bs_2.prob_success}</formula>
 			<comment></comment>
 		</query>
 		<query>
