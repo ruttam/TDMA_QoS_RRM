@@ -33,6 +33,14 @@ const int latency[profileId_t] = {-1, 2500, 70, 40, 20};    // latency requireme
 
 // const int audio_quality[profileId_t] = {-1, 32, 32, 48, 192};    // audio quality requirements (in kbits/s) of each type of profiles
 
+const int UL_header_size = 14;    // UL header size (in Bytes)
+
+const int DL_header_size = 21;    // DL header size (in Bytes)
+
+const int UL_meta_size = 19;    // UL meta data bits (reserved for and shared between DLC and MAC data) (in Bytes)
+
+const int DL_meta_size = 30;    // DL meta data bits (reserved for and shared between DLC and MAC data) (in Bytes)
+
 // GLOBAL VARIABLES ---------------------------------------------------------------------------
 
 profileId_t profile[UEid_t] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0};    // current profiles of the UEs
@@ -47,30 +55,28 @@ int data_rate[BSid_t] = {60, 60};    // initial data transmission rate (in Mbit/
 
 int GI[BSid_t] = {400, 400};    // required GI size according to the MCS used (in us)
 
-int number_GI[BSid_t] = {2, 2};    // initial number of GI spaces  -- UNUSED
-
 int GI_size[BSid_t] = {0, 0};    // actual GI size of the current frame (in us)
 
-typedef int [0, number_UE] slotID_t;
+typedef int [0, number_UE + 1] slotID_t;
 
 int owner[BSid_t][slotID_t] = {
-    {-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1},
-    {-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1}
+    {-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1},
+    {-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1}
 };
 
 int slot_start[BSid_t][slotID_t] = {    // start times of dedicated TCH slots for the nodes in current frame + RACH
-    {-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1},
-    {-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1}
+    {-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1},
+    {-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1}
 };
 
 int slot_size[BSid_t][slotID_t] = {    // sizes of dedicated TCH slots for the nodes in current frame + RACH (ms * unit)
-    {-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1},
-    {-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1}
+    {-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1},
+    {-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1}
 };
 
 int24_t slot_data[BSid_t][slotID_t] = {    // data sizes of dedicated TCH slots in current frame + RACH (in bits)
-    {-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1},
-    {-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1}
+    {-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1},
+    {-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1}
 };
 
 // --------------------------------------------------------------------------------------------
@@ -86,6 +92,8 @@ const int MCS = 3;    // MCS index
 const int audio_quality = 48;    // kbits/s
 
 const profileId_t static_profile[UEid_t] = {3, 3, 3, 3, 3, 3, 3, 1, 1, 1};    // profiles of the UEs - can be negotiated with the BS
+
+const int UL_audio_size = 41;    // UL slot audio size: audio (40B) + checksum (1B) (in Bytes)
 
 // --------------------------------------------------------------------------------------------
 // UE INITIAL
@@ -123,6 +131,16 @@ void setOffset()    // setting offset values from possible variations in offsets
         for(i: UEid_t) start_offsets[i] = offsets[offset_used][i] * 1000 * unit;
 }
 
+bool dedicatedSlot(BSid_t bs, UEid_t id)
+{
+    for(i: slotID_t)
+    {
+        if(owner[bs][i] == id)
+            return true;
+    }
+    return false;
+}
+
 // --------------------------------------------------------------------------------------------
 // UE CONNECT
 // --------------------------------------------------------------------------------------------
@@ -131,11 +149,15 @@ void setOffset()    // setting offset values from possible variations in offsets
 
 broadcast chan connected[UEid_t];    // UE connected signal
 
+broadcast chan joined[UEid_t];    // UE joined signal
+
 broadcast chan disconnected[UEid_t];    // UE disconnected signal
 
 broadcast chan failed[UEid_t];    // UE signal for failed latency requirements
 
 broadcast chan RACH[BSid_t];    // UE signal to BS through the random access channel in order to connect
+
+broadcast chan UE_process[UEid_t];    // UE QCA signal to internally process data
 
 const int disconnect_timeout = 5000 * 1000 * unit;    // timeout for disconnect in us
 
@@ -144,7 +166,7 @@ const int disconnect_timeout = 5000 * 1000 * unit;    // timeout for disconnect 
 // connection channel stability
 int connection_channel_stability[UEid_t] = {75, 75, 75, 75, 75, 75, 75, 75, 75, 75};
 
-int RACH_slot[BSid_t] = {number_UE, number_UE};
+int RACH_slot[BSid_t] = {0, 0};
 
 int RACH_start[BSid_t] = {0, 0};    // start time of random access channel in the current frame
 
@@ -153,6 +175,11 @@ int RACH_size[BSid_t] = {0, 0};  // size of random access channel slots (us * un
 int RACH_id[BSid_t] = {-1, -1};    // UE id which sends RACH signal in the current RACH slot
 
 bool ACK[UEid_t] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0};    // BS acknowledge of the initial UL resource request from the UE
+
+bool connecting[BSid_t][UEid_t] = {    // UE id which send RACH connection request
+    {0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+    {0, 0, 0, 0, 0, 0, 0, 0, 0, 0}
+};
 
 // --------------------------------------------------------------------------------------------
 // LISTEN_ONLY
@@ -231,7 +258,7 @@ typedef struct {
 } Queue_t;
 
 bool isEmpty(Queue_t q){
-    return q.size &lt;= 0;
+    return q.size == 0;
 }
 
 bool isFull(Queue_t q)
@@ -262,7 +289,7 @@ int insert(Node_t value, Queue_t &amp;q)    // add a node according to its prior
     if(!isFull(q)){
         if(isEmpty(q))
         {
-            q.queue[++q.size] = value;
+            q.queue[q.size++] = value;
             q.front = q.rear = 0;
         }
         else
@@ -318,7 +345,7 @@ int enqueue(Node_t value, Queue_t &amp;q)    // add a node at the end of the que
     }
 }
 
-int pop(Queue_t q)
+int pop(Queue_t &amp;q)
 {
     if(isEmpty(q))
     {
@@ -334,7 +361,7 @@ int pop(Queue_t q)
     }
 }
 
-int dequeue(Queue_t q)
+int dequeue(Queue_t &amp;q)
 {
 
     if(isEmpty(q))
@@ -361,25 +388,21 @@ broadcast chan schedule[BSid_t];    // BS signal to execute radio resource sched
 
 broadcast chan frame_start[BSid_t];    // Frame clock reset signal (clock interrupt)
 
-broadcast chan transmit_ready[BSid_t];    // RRM signal to BS that scheduling is done
+broadcast chan ready[BSid_t];    // RRM signal to BS that scheduling is done
 
-broadcast chan retransmit_ready[BSid_t];    // RRM signal to BS that retransmission scheduling is done
+broadcast chan BS_process[UEid_t];    // BS QCA signal to internally process data
 
-broadcast chan processing[UEid_t];    // BS QCA signal to DSP to internally process data
-
-const int broadcast_channel[BSid_t] = {2, 7};    // BCH transmission channel frequencies (kHz)
-
-const int retransmission_channel[BSid_t] = {4, 9};    // BCH retransmission channel frequencies (kHz)
+const int channel[BSid_t][2] =    // BCH transmission channel frequencies (kHz)
+{
+    {2, 4},
+    {7, 9}
+};
 
 const int channel_switch = 244 * unit;    // frequency change latency
 
 // VARIABLES ----------------------------------------------------------------------------------
 
-int bch_interference_probability[BSid_t][2] =
-{
-    {10, 90},
-    {10, 90}
-};
+int BCH_duration[BSid_t] = {0, 0};
 
 bool retransmission[BSid_t] = {false, false};
 
@@ -387,14 +410,14 @@ int number_slots[BSid_t] = {0, 0};    //  UTCHs, UCCHs and RACH
 
 Queue_t priority_queue[BSid_t] =    // Queue of active devices with profiles RTa, hqRTa and sRTA
 {
-    {-1, -1, -1, {{-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}}},
-    {-1, -1, -1, {{-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}}}
+    {-1, -1, 0, {{-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}}},
+    {-1, -1, 0, {{-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}}}
 };
 
-Queue_t request_queue[BSid_t] =    // Queue of active devices in connected and Listen-Only modes
+Queue_t request_queue[BSid_t] =    // Queue of active devices in joined and Listen-Only modes
 {
-    {-1, -1, -1, {{-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}}},
-    {-1, -1, -1, {{-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}}}
+    {-1, -1, 0, {{-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}}},
+    {-1, -1, 0, {{-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}}}
 };
 
 bool active_UE[BSid_t][UEid_t] = {    // identification of UE that are active
@@ -414,9 +437,10 @@ bool connected_UE[BSid_t][UEid_t] = {    // identification of UE that are in ini
 
 int UE_CQI[UEid_t] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0};    // channel quality indications of all active UE
 
-int current_slot[BSid_t] = {-1, -1};
+slotID_t current_slot[BSid_t] = {0, 0};
 
 // FUNCTIONS ----------------------------------------------------------------------------------
+
 // Get number of active, listeners and connected UE
 int getActive(BSid_t bs)
 {
@@ -424,7 +448,9 @@ int getActive(BSid_t bs)
     for(i: UEid_t)
     {
         if(active_UE[bs][i])
+        {
             counter++;
+        }
     }
     return counter;
 }
@@ -435,7 +461,9 @@ int getListeners(BSid_t bs)
     for(i: UEid_t)
     {
         if(listen_only_UE[bs][i])
+        {
             counter++;
+        }
     }
     return counter;
 }
@@ -445,17 +473,29 @@ int getConnected(BSid_t bs)
     int counter = 0;
     for(i: UEid_t)
     {
-        if(listen_only_UE[bs][i])
+        if(connected_UE[bs][i])
+        {
             counter++;
+        }
     }
     return counter;
 }
 
 // --------------------------------------------------------------------------------------------
 
+int getDLMetaData(BSid_t bs)
+{
+    return DL_header_size * 8 + (number_slots[bs] - 1) * 2 + DL_meta_size * 8;
+}
+
+int getDLAudioData(BSid_t bs)
+{
+    // return UL_audio_size * 8;
+    return (audio_quality/1000) * frame_size[bs];
+}
+
 int BCH_meta_bits;
 int BCH_slot_audio_bits;
-
 // Frame-based sampling approach for the initial case
 // Note: max capacity of BCH headers is 40 Bytes
 int getBCHDuration(BSid_t bs)    // in us
@@ -475,7 +515,7 @@ int getBCHDuration(BSid_t bs)    // in us
 
 int getULMetaData()
 {
-    return 20 * 8;
+    return (UL_header_size + UL_meta_size) * 8;
 }
 
 int getULMetaDuration(BSid_t bs)    // in us
@@ -483,14 +523,22 @@ int getULMetaDuration(BSid_t bs)    // in us
     return getULMetaData()/data_rate[bs];
 }
 
+int audio_size;
 int getULAudioData(BSid_t bs)
 {
-    return (audio_quality/1000) * frame_size[bs] + getULMetaData();
+    // return UL_audio_size * 8;
+    audio_size = (audio_quality/1000) * frame_size[bs] + getULMetaData();
+    return audio_size;
 }
 
 int getULAudioDuration(BSid_t bs)    // in us
 {
     return getULAudioData(bs)/data_rate[bs];
+}
+
+int getACKDuration(BSid_t bs)
+{
+    return (DL_header_size * 8)/data_rate[bs];
 }
 
 int getRACHData()
@@ -505,39 +553,64 @@ int getRACHDuration(BSid_t bs)    // in us
 
 // --------------------------------------------------------------------------------------------
 
-void add_UE(BSid_t bs, UEid_t id)
+void addUE(BSid_t bs, UEid_t id)
 {
     Node_t new_node = {-1, id};
-    ACK[id] = true;
     if(static_profile[id] == initial)
     {
         connected_UE[bs][id] = true;
+        enqueue(new_node, request_queue[bs]);
     }
     else if(static_profile[id] == Listen_Only)
     {
         listen_only_UE[bs][id] = true;
+        enqueue(new_node, request_queue[bs]);
     }
     else
     {
         active_UE[bs][id] = true;
-        //new_node.prior = profile[id];
-        //insert(new_node, priority_queue[bs]);
+        new_node.prior = static_profile[id];
+        insert(new_node, priority_queue[bs]);
         return;
     }
-    //enqueue(new_node, request_queue[bs]);
 }
 
 // --------------------------------------------------------------------------------------------
 // SLEEP MODE
 // --------------------------------------------------------------------------------------------
 
+// CONSTANTS ----------------------------------------------------------------------------------
+
 broadcast chan sleep[UEid_t];    // UE signal for RF module to sleep
 
 broadcast chan wake_up[UEid_t];    // UE signal for RF module to wake-up
 
-int sleep_time[UEid_t] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0};    // RRM (Radio Resource Manager) calculated sleep time for UE after receiving UL ACKs</declaration>
+const int sleep_latency = 500;    // entering sleep mode latency (in us)
+
+const int wake_up_latency = 250;    // wake-up latency (in us)
+
+// VARIABLES ----------------------------------------------------------------------------------
+
+int24_t sleep_time[UEid_t] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0};    // RRM (Radio Resource Manager) calculated sleep time for UE after receiving UL ACKs
+
+// FUNCTIONS ----------------------------------------------------------------------------------
+
+int24_t getSleepTime(UEid_t id)
+{
+    int bs = getBS(id);
+    if(dedicatedSlot(bs, id))
+    {
+        sleep_time[id] = frame_size[bs]/2 - wake_up_latency;
+    }
+    else
+    {
+        sleep_time[id] = frame_size[bs] - BCH_duration[bs] - sleep_latency - wake_up_latency;
+    }
+     return sleep_time[id];
+}
+</declaration>
 	<template>
-		<name>InternalProcessing</name>
+		<name>InternalUEProcessing</name>
 		<parameter>UEid_t id, int uart_speed</parameter>
 		<declaration>// --------------------------------------------------------------------------------------------
 // CONSTANTS
@@ -550,8 +623,6 @@ const int internal_processing = 50;    // us
 const int cb_processing = 50;    // audio data processing time in central base (in us)
 
 const int decode_time = 1/(44000 * 1000000);    // audio decoding time with 44kHz packet rate (in us)
-
-const int qca_processing = 50;    // QCA processing time (in us)
 
 // --------------------------------------------------------------------------------------------
 // VARIABLES
@@ -576,8 +647,9 @@ int getAESTime()
 
 int getDataType()
 {
-    int i = owner[id][current_slot[id]];
-    if(i &gt; number_UE &amp;&amp; profile[i] == RTa)
+    if(profile[id] == RTa)
+        return true;
+    if(profile[id] == Listen_Only)
         return true;
     return false;
 }
@@ -593,85 +665,226 @@ int getUARTTime()
 // Have a separate template for UE and BS internal processing (or handle the IDs so there wouldn't
 // be any overlay)
 // --------------------------------------------------------------------------------------------</declaration>
-		<location id="id0" x="-569" y="-306" color="#ffffff">
-			<name x="-629" y="-314">INITIAL</name>
+		<location id="id0" x="-569" y="-187" color="#ffffff">
+			<name x="-629" y="-204">INITIAL</name>
+			<label kind="invariant" x="-629" y="-187">x' == 0</label>
 		</location>
-		<location id="id1" x="-187" y="-204" color="#ff00ff">
-			<name x="-229" y="-187">PROCESS_INTERNAL</name>
-			<label kind="invariant" x="-229" y="-170">x &lt;= internal_processing</label>
+		<location id="id1" x="-187" y="-85" color="#ff00ff">
+			<name x="-229" y="-68">PROCESS_INTERNAL</name>
+			<label kind="invariant" x="-229" y="-51">x &lt;= internal_processing</label>
 		</location>
-		<location id="id2" x="-365" y="-204">
-			<name x="-416" y="-187">TRANSFER_AES</name>
-			<label kind="invariant" x="-416" y="-170">x &lt;= aes_transmit</label>
-			<label kind="comments" x="-408" y="-144">To Central Base</label>
+		<location id="id2" x="-187" y="-306">
+			<name x="-170" y="-323">TRANSFER_AES</name>
+			<label kind="invariant" x="-170" y="-306">x &lt;= aes_transmit</label>
+			<label kind="comments" x="-43" y="-314">To Central Base</label>
 		</location>
 		<location id="id3" x="-187" y="-399" color="#ff00ff">
-			<name x="-221" y="-450">DECODE_AUDIO</name>
-			<label kind="invariant" x="-221" y="-433">x &lt;= decode_time</label>
+			<name x="-229" y="-450">DECODE_AUDIO</name>
+			<label kind="invariant" x="-229" y="-433">x &lt;= decode_time</label>
 		</location>
-		<location id="id4" x="-187" y="-306">
+		<location id="id4" x="-187" y="-187">
 			<urgent/>
 		</location>
 		<location id="id5" x="-569" y="-399" color="#ff00ff">
 			<name x="-663" y="-450">PROCESS_CENTRAL_BASE</name>
 			<label kind="invariant" x="-620" y="-433">x &lt;= cb_processing</label>
 		</location>
-		<location id="id6" x="-569" y="-204">
-			<name x="-706" y="-221">TRANSFER_UART</name>
-			<label kind="invariant" x="-697" y="-204">x &lt;= uart_latency</label>
-			<label kind="comments" x="-739" y="-246">QCA to host processor</label>
+		<location id="id6" x="-569" y="-85">
+			<name x="-612" y="-68">TRANSFER_UART</name>
+			<label kind="invariant" x="-603" y="-51">x' == 1 &amp;&amp;
+x &lt;= uart_latency</label>
+			<label kind="comments" x="-620" y="-8">QCA to host processor</label>
 		</location>
 		<init ref="id0"/>
 		<transition>
 			<source ref="id6"/>
-			<target ref="id2"/>
-			<label kind="guard" x="-552" y="-204">x &gt;= uart_latency</label>
-			<label kind="assignment" x="-552" y="-187">x = 0</label>
+			<target ref="id1"/>
+			<label kind="guard" x="-416" y="-85">x &gt;= uart_latency</label>
+			<label kind="assignment" x="-416" y="-68">x = 0</label>
 		</transition>
 		<transition>
 			<source ref="id5"/>
 			<target ref="id0"/>
-			<label kind="guard" x="-561" y="-382">x &gt;= cb_processing</label>
-			<label kind="assignment" x="-561" y="-365">x = 0</label>
+			<label kind="guard" x="-561" y="-314">x &gt;= cb_processing</label>
+			<label kind="assignment" x="-561" y="-297">x = 0</label>
 		</transition>
 		<transition>
 			<source ref="id3"/>
 			<target ref="id5"/>
-			<label kind="guard" x="-399" y="-433">x &gt;= decode_time</label>
-			<label kind="assignment" x="-399" y="-416">x = 0</label>
+			<label kind="guard" x="-416" y="-442">x &gt;= decode_time</label>
+			<label kind="assignment" x="-416" y="-425">x = 0</label>
 		</transition>
 		<transition>
 			<source ref="id4"/>
 			<target ref="id0"/>
-			<label kind="guard" x="-399" y="-331">!isAudio</label>
-			<label kind="assignment" x="-399" y="-306">x = 0</label>
-			<nail x="-357" y="-306"/>
+			<label kind="guard" x="-416" y="-212">!isAudio</label>
+			<label kind="assignment" x="-416" y="-187">x = 0</label>
+			<nail x="-374" y="-187"/>
 		</transition>
 		<transition>
 			<source ref="id2"/>
-			<target ref="id1"/>
-			<label kind="guard" x="-331" y="-238">x &gt;= aes_transmit</label>
-			<label kind="assignment" x="-331" y="-221">x = 0</label>
+			<target ref="id3"/>
+			<label kind="guard" x="-178" y="-374">x &gt;= aes_transmit</label>
+			<label kind="assignment" x="-178" y="-357">x = 0</label>
 		</transition>
 		<transition>
 			<source ref="id4"/>
-			<target ref="id3"/>
-			<label kind="guard" x="-178" y="-382">isAudio</label>
-			<label kind="assignment" x="-178" y="-365">x = 0,
+			<target ref="id2"/>
+			<label kind="guard" x="-178" y="-272">isAudio</label>
+			<label kind="assignment" x="-178" y="-255">x = 0,
 aes_transmit = getAESTime()</label>
 		</transition>
 		<transition>
 			<source ref="id1"/>
 			<target ref="id4"/>
-			<label kind="guard" x="-178" y="-289">x &gt;= internal_processing</label>
-			<label kind="assignment" x="-178" y="-272">x = 0,
+			<label kind="guard" x="-178" y="-170">x &gt;= internal_processing</label>
+			<label kind="assignment" x="-178" y="-153">x = 0,
 isAudio = getDataType()</label>
 		</transition>
 		<transition>
 			<source ref="id0"/>
 			<target ref="id6"/>
-			<label kind="synchronisation" x="-561" y="-289">processing[id]?</label>
-			<label kind="assignment" x="-561" y="-272">x = 0,
+			<label kind="synchronisation" x="-561" y="-170">UE_process[id]?</label>
+			<label kind="assignment" x="-561" y="-153">x = 0,
+uart_latency = getUARTTime()</label>
+		</transition>
+	</template>
+	<template>
+		<name>InternalBSProcessing</name>
+		<parameter>BSid_t bs, int uart_speed</parameter>
+		<declaration>// --------------------------------------------------------------------------------------------
+// CONSTANTS
+// --------------------------------------------------------------------------------------------
+
+const int AES_bit_clock = 12288;    // kHz
+
+const int internal_processing = 50;    // us
+
+const int cb_processing = 50;    // audio data processing time in central base (in us)
+
+const int decode_time = 1/(44000 * 1000000);    // audio decoding time with 44kHz packet rate (in us)
+
+// --------------------------------------------------------------------------------------------
+// VARIABLES
+// --------------------------------------------------------------------------------------------
+
+clock x;    // general utility timer
+
+bool isAudio = false;
+
+int aes_transmit = 0;
+
+int uart_latency;
+
+// --------------------------------------------------------------------------------------------
+// FUNCTIONS
+// --------------------------------------------------------------------------------------------
+
+int getAESTime()
+{
+    return getULAudioData(owner[bs][current_slot[bs]])/(AES_bit_clock/1000);
+}
+
+int getDataType()
+{
+    int i = owner[bs][current_slot[bs]];
+    if(i &gt; number_UE &amp;&amp; profile[i] == RTa)
+        return true;
+    return false;
+}
+
+int getUARTTime()
+{
+    return getULAudioData(owner[bs][current_slot[bs]])/(uart_speed/1000);
+}
+
+// --------------------------------------------------------------------------------------------
+// TODO
+// 44kHz is sampling rate
+// Have a separate template for UE and BS internal processing (or handle the IDs so there wouldn't
+// be any overlay)
+// --------------------------------------------------------------------------------------------</declaration>
+		<location id="id7" x="-212" y="51" color="#ffffff">
+			<name x="-272" y="43">INITIAL</name>
+			<label kind="invariant" x="-272" y="59">x' == 0</label>
+		</location>
+		<location id="id8" x="170" y="153" color="#ff00ff">
+			<name x="128" y="170">PROCESS_INTERNAL</name>
+			<label kind="invariant" x="128" y="187">x &lt;= internal_processing</label>
+		</location>
+		<location id="id9" x="170" y="-59">
+			<name x="187" y="-67">TRANSFER_AES</name>
+			<label kind="invariant" x="187" y="-50">x &lt;= aes_transmit</label>
+			<label kind="comments" x="314" y="-59">To Central Base</label>
+		</location>
+		<location id="id10" x="169" y="-127" color="#ff00ff">
+			<name x="135" y="-178">DECODE_AUDIO</name>
+			<label kind="invariant" x="135" y="-161">x &lt;= decode_time</label>
+		</location>
+		<location id="id11" x="170" y="51">
+			<urgent/>
+		</location>
+		<location id="id12" x="-213" y="-127" color="#ff00ff">
+			<name x="-307" y="-178">PROCESS_CENTRAL_BASE</name>
+			<label kind="invariant" x="-264" y="-161">x &lt;= cb_processing</label>
+		</location>
+		<location id="id13" x="-212" y="153">
+			<name x="-272" y="170">TRANSFER_UART</name>
+			<label kind="invariant" x="-263" y="187">x' == 1 &amp;&amp;
+x &lt;= uart_latency</label>
+			<label kind="comments" x="-280" y="229">QCA to host processor</label>
+		</location>
+		<init ref="id7"/>
+		<transition>
+			<source ref="id13"/>
+			<target ref="id8"/>
+			<label kind="guard" x="-76" y="153">x &gt;= uart_latency</label>
+			<label kind="assignment" x="-76" y="170">x = 0</label>
+		</transition>
+		<transition>
+			<source ref="id12"/>
+			<target ref="id7"/>
+			<label kind="guard" x="-204" y="-68">x &gt;= cb_processing</label>
+			<label kind="assignment" x="-204" y="-51">x = 0</label>
+		</transition>
+		<transition>
+			<source ref="id10"/>
+			<target ref="id12"/>
+			<label kind="guard" x="-43" y="-161">x &gt;= decode_time</label>
+			<label kind="assignment" x="-43" y="-144">x = 0</label>
+		</transition>
+		<transition>
+			<source ref="id11"/>
+			<target ref="id7"/>
+			<label kind="guard" x="-42" y="26">!isAudio</label>
+			<label kind="assignment" x="-42" y="51">x = 0</label>
+			<nail x="0" y="51"/>
+		</transition>
+		<transition>
+			<source ref="id9"/>
+			<target ref="id10"/>
+			<label kind="guard" x="178" y="-110">x &gt;= aes_transmit</label>
+			<label kind="assignment" x="178" y="-93">x = 0</label>
+		</transition>
+		<transition>
+			<source ref="id11"/>
+			<target ref="id9"/>
+			<label kind="guard" x="178" y="-25">isAudio</label>
+			<label kind="assignment" x="178" y="-8">x = 0,
+aes_transmit = getAESTime()</label>
+		</transition>
+		<transition>
+			<source ref="id8"/>
+			<target ref="id11"/>
+			<label kind="guard" x="178" y="76">x &gt;= internal_processing</label>
+			<label kind="assignment" x="178" y="93">x = 0,
+isAudio = getDataType()</label>
+		</transition>
+		<transition>
+			<source ref="id7"/>
+			<target ref="id13"/>
+			<label kind="synchronisation" x="-204" y="68">BS_process[bs]?</label>
+			<label kind="assignment" x="-204" y="85">x = 0,
 uart_latency = getUARTTime()</label>
 		</transition>
 	</template>
@@ -682,106 +895,124 @@ uart_latency = getUARTTime()</label>
 // VARIABLES
 // --------------------------------------------------------------------------------------------
 
-bool success = false;    // Successful scheduling indication
-
-int disconnect_UE = -1;
+int j = 0;
+Node_t ue;
+int UL_duration = 0;
+int ACK_duration = 0;
+int slot_count = 3;    // initial number of slots: BCH, ACK BCH and RACH
+int start_time = 0;
+int transmission_duration;
+int ch_switch = 0;
 
 // --------------------------------------------------------------------------------------------
 // FUNCTIONS
 // --------------------------------------------------------------------------------------------
 
-int scheduleRF()
+int getBCH()
 {
-    bool new_entrants = false;
-    for(i: UEid_t)
+    return getBCHDuration(bs);
+}
+
+bool verifyGI(int temp_GI)
+{
+    if(GI[bs] &lt;= temp_GI)    // actual GI size must be &gt;= of GI required by MCS used
     {
-        if(ACK[i])
-        {
-            new_entrants = true;
-        }
+        return true;
     }
-    if(!success || new_entrants)
+    else
     {
-        int j = 0;
-        int BCH_end;
-        int slot_count;    // BCH, UTCHs, UCCHs and RACH
-        int start_time = 0;
-        int transmission_duration = frame_size[bs]/2;
-        int UL_duration = getULAudioDuration(bs) * getActive(bs) + getULMetaDuration(bs) * (getListeners(bs) + getConnected(bs));
+        return false;
+    }
+}
 
-        BCH_end = channel_switch + getBCHDuration(bs);
-        RACH_size[bs] = getRACHDuration(bs);
-        number_slots[bs] = getActive(bs) + getListeners(bs) + 1;
-        slot_count = 2 + number_slots[bs];
-        GI_size[bs] = (transmission_duration - (BCH_end + UL_duration + RACH_size[bs]))/slot_count;
+void processQueue(Queue_t queue, bool audio)
+{
+    if(!isEmpty(queue))
+    {
+        int i = queue.size;
+	    while(i-- &gt; 0)
+	    {
+	        int temp_GI;
+	        int duration;
+	        ue = getFirst(queue);
 
-        // GI verification
-        if(GI_size[bs] &lt; GI[bs])    // actual GI size must be &gt;= of GI required by MCS used
-        {
-            // drop Listen-Only node and re-evaluate
-            for(i: UEid_t)
-            {
-                if(listen_only_UE[bs][i])
-                {
-                    disconnect_UE = i;
-                    return 0;
-                }
-            }
-            // drop streaming node and re-evaluate, if no Listen-Only nodes available
-            for(i: UEid_t)
-            {
-                if(active_UE[bs][i])
-                {
-                    disconnect_UE = i;
-                    return 0;
-                }
-            }
-            disconnect_UE = -1;    // unschedulable - erroneous frame setup
-            return 0;
-        }
+	        if(audio)
+	            duration = getULAudioDuration(bs);
+	        else
+	            duration = getULMetaDuration(bs);
 
-        // slot start calculation
-        start_time = BCH_end + GI_size[bs];
-        for(i: UEid_t)
-        {
-            if(active_UE[bs][i])
+	        temp_GI = (transmission_duration - (BCH_duration[bs] + (UL_duration + duration)+ ACK_duration + RACH_size[bs] + ch_switch))/slot_count;
+	        // verify GI size
+	        if(!verifyGI(temp_GI))
+	            return;
+
+	        GI_size[bs] = temp_GI;
+	        UL_duration += duration;
+	        slot_count += 1;
+	        owner[bs][j++] = ue.id;
+	        slot_size[bs][ue.id] = duration;
+	        slot_start[bs][ue.id] = start_time;
+	        start_time += slot_size[bs][ue.id];
+
+            if(queue.size &gt; 1)
             {
-                owner[bs][j++] = i;
-                slot_size[bs][i] = getULAudioDuration(bs);
-                slot_data[bs][i] = getULAudioData(bs);
-                slot_start[bs][i] = start_time;
-                start_time = slot_start[bs][i] + slot_size[bs][i]  + GI_size[bs];
+	            enqueue(ue, queue);
+	            dequeue(queue);
             }
-        }
-        for(i: UEid_t)
-        {
-            if(listen_only_UE[bs][i])
-            {
-                owner[bs][j++] = i;
-                slot_size[bs][i] = getULMetaDuration(bs);
-                slot_data[bs][i] = getULMetaData();
-                slot_start[bs][i] = start_time;
-                start_time = slot_start[bs][i] + slot_size[bs][i] + GI_size[bs];
-            }
-        }
-        for(i: UEid_t)
-        {
-            if(connected_UE[bs][i])
-            {
-                owner[bs][j++] = i;
-                slot_size[bs][i] = getULMetaDuration(bs);
-                slot_data[bs][i] = getULMetaData();
-                slot_start[bs][i] = start_time;
-                start_time = slot_start[bs][i] + slot_size[bs][i] + GI_size[bs];
-            }
-        }
+	    }
+    }
+}
+
+void scheduleFrame()
+{
+    int i = 0;
+    j = 0;
+    slot_count = 3;
+    start_time = 0;
+    transmission_duration = frame_size[bs]/2;
+    ch_switch = 0;
+
+    if(retransmission[bs]) {
+       ch_switch = channel_switch;
+    }
+
+    BCH_duration[bs] = getBCH();
+    RACH_size[bs] = getRACHDuration(bs);
+    ACK_duration = getACKDuration(bs);
+    GI_size[bs] = (transmission_duration - (BCH_duration[bs] + UL_duration + ACK_duration + RACH_size[bs] + ch_switch))/(slot_count - 1);
+    // verify GI size
+    if(!verifyGI(GI_size[bs]))
+        return;
+
+    start_time += BCH_duration[bs];
+    processQueue(priority_queue[bs], true);
+    processQueue(request_queue[bs], false);
+    number_slots[bs] = slot_count - 2;
+    
+    // ACK BCH
+    if(slot_count &gt; 3) {
         owner[bs][j++] = number_UE;
-        slot_size[bs][number_UE] = RACH_size[bs];
-        slot_data[bs][number_UE] = getRACHData();
+        slot_size[bs][number_UE] = ACK_duration;
+        // slot_data[bs][number_UE] = getACKData();
         slot_start[bs][number_UE] = start_time;
-        RACH_start[bs] = start_time;
+        start_time = start_time + slot_size[bs][number_UE];
+        number_slots[bs] = slot_count - 1;
     }
-    return 1;
+
+    // RACH
+    owner[bs][j++] = number_UE + 1;
+    slot_size[bs][number_UE + 1] = RACH_size[bs];
+    slot_start[bs][number_UE + 1] = start_time;
+    RACH_slot[bs] = number_UE + 1;
+
+    i = 0;
+    slot_start[bs][owner[bs][i]] = BCH_duration[bs] + GI_size[bs];
+    for(i = 1; i &lt; number_slots[bs]; i++)
+    {
+        if(owner[bs][i] != -1)
+            slot_start[bs][owner[bs][i]] = slot_start[bs][owner[bs][i-1]] + slot_size[bs][owner[bs][i-1]] + GI_size[bs];
+    }
+    RACH_start[bs] = slot_start[bs][RACH_slot[bs]];
 }
 
 // --------------------------------------------------------------------------------------------
@@ -789,119 +1020,97 @@ int scheduleRF()
 // in the ACK enabled version: reset the ACK
 // --------------------------------------------------------------------------------------------
 </declaration>
-		<location id="id7" x="-841" y="-519" color="#ffffff">
-			<name x="-851" y="-553">INITIAL</name>
+		<location id="id14" x="-841" y="-519" color="#ffffff">
+			<name x="-901" y="-535">INITIAL</name>
 		</location>
-		<location id="id8" x="-841" y="-374">
-			<name x="-918" y="-399">STARTED</name>
+		<location id="id15" x="-841" y="-374">
+			<name x="-926" y="-391">STARTED</name>
 			<urgent/>
 		</location>
-		<location id="id9" x="-603" y="-280">
-			<name x="-628" y="-263">FINISHED</name>
+		<location id="id16" x="-569" y="-518">
+			<name x="-552" y="-535">FINISHED</name>
 			<urgent/>
 		</location>
-		<location id="id10" x="-1028" y="-374">
-			<name x="-1088" y="-357">RETRANSMISSION</name>
-			<label kind="comments" x="-1130" y="-331">Retransmission uses the same
-schedule as initial transmission -
-no need for extra scheduling.</label>
+		<location id="id17" x="-841" y="-255" color="#ffff00">
+			<name x="-901" y="-238">RETRANSMISSION</name>
 			<urgent/>
 		</location>
-		<location id="id11" x="-603" y="-425">
-			<name x="-620" y="-459">RETRY</name>
+		<location id="id18" x="-671" y="-374">
+			<name x="-724" y="-357">TRANSMISSION</name>
 			<urgent/>
 		</location>
-		<location id="id12" x="-782" y="-374">
-			<name x="-817" y="-408">UNSCHEDULABLE</name>
+		<location id="id19" x="-569" y="-374">
+			<name x="-552" y="-391">SCHEDULE</name>
 			<urgent/>
 		</location>
-		<init ref="id7"/>
+		<init ref="id14"/>
 		<transition>
-			<source ref="id10"/>
-			<target ref="id7"/>
-			<label kind="synchronisation" x="-1020" y="-544">retransmit_ready[bs]!</label>
-			<nail x="-1028" y="-518"/>
+			<source ref="id19"/>
+			<target ref="id16"/>
+			<label kind="assignment" x="-680" y="-467">scheduleFrame()</label>
 		</transition>
 		<transition>
-			<source ref="id12"/>
-			<target ref="id8"/>
+			<source ref="id18"/>
+			<target ref="id19"/>
 		</transition>
 		<transition>
-			<source ref="id11"/>
-			<target ref="id12"/>
-			<label kind="guard" x="-756" y="-374">disconnect_UE == -1</label>
-			<nail x="-620" y="-374"/>
+			<source ref="id17"/>
+			<target ref="id19"/>
+			<nail x="-569" y="-255"/>
 		</transition>
 		<transition>
-			<source ref="id11"/>
-			<target ref="id8"/>
-			<label kind="guard" x="-816" y="-468">disconnect_UE != -1</label>
-			<label kind="synchronisation" x="-816" y="-451">disconnected[disconnect_UE]!</label>
-			<nail x="-817" y="-425"/>
+			<source ref="id15"/>
+			<target ref="id17"/>
+			<label kind="guard" x="-833" y="-323">retransmission[bs]</label>
 		</transition>
 		<transition>
-			<source ref="id9"/>
-			<target ref="id11"/>
-			<label kind="guard" x="-603" y="-340">!success</label>
+			<source ref="id16"/>
+			<target ref="id14"/>
+			<label kind="synchronisation" x="-731" y="-544">ready[bs]!</label>
 		</transition>
 		<transition>
-			<source ref="id8"/>
-			<target ref="id10"/>
-			<label kind="guard" x="-986" y="-374">retransmission[bs]</label>
+			<source ref="id15"/>
+			<target ref="id18"/>
+			<label kind="guard" x="-816" y="-399">!retransmission[bs]</label>
 		</transition>
 		<transition>
-			<source ref="id9"/>
-			<target ref="id7"/>
-			<label kind="guard" x="-654" y="-561">success</label>
-			<label kind="synchronisation" x="-654" y="-544">transmit_ready[bs]!</label>
-			<nail x="-536" y="-279"/>
-			<nail x="-536" y="-518"/>
-		</transition>
-		<transition>
-			<source ref="id8"/>
-			<target ref="id9"/>
-			<label kind="guard" x="-790" y="-306">!retransmission[bs]</label>
-			<label kind="assignment" x="-790" y="-281">success = scheduleRF()</label>
-			<nail x="-841" y="-280"/>
-		</transition>
-		<transition>
-			<source ref="id7"/>
-			<target ref="id8"/>
-			<label kind="synchronisation" x="-935" y="-459">schedule[bs]?</label>
+			<source ref="id14"/>
+			<target ref="id15"/>
+			<label kind="synchronisation" x="-833" y="-467">schedule[bs]?</label>
 		</transition>
 	</template>
 	<template>
 		<name>FrameClock</name>
 		<parameter>BSid_t bs</parameter>
-		<location id="id13" x="-561" y="-170" color="#ffffff">
-			<name x="-586" y="-204">INITIAL</name>
+		<location id="id20" x="-561" y="-187" color="#ffffff">
+			<name x="-586" y="-221">INITIAL</name>
 		</location>
-		<location id="id14" x="-561" y="-34">
-			<name x="-603" y="-17">FRAME_TIME</name>
-			<label kind="invariant" x="-637" y="0">frame_clk[bs] &lt;= frame_size[bs]/2</label>
+		<location id="id21" x="-561" y="-17">
+			<name x="-603" y="0">FRAME_TIME</name>
+			<label kind="invariant" x="-646" y="17">frame_clk[bs] &lt;= frame_size[bs]/2</label>
 		</location>
-		<location id="id15" x="-561" y="-102">
+		<location id="id22" x="-561" y="-102">
 			<urgent/>
 		</location>
-		<init ref="id13"/>
+		<init ref="id20"/>
 		<transition>
-			<source ref="id15"/>
-			<target ref="id14"/>
-			<label kind="synchronisation" x="-671" y="-76">frame_start[bs]!</label>
+			<source ref="id22"/>
+			<target ref="id21"/>
+			<label kind="synchronisation" x="-671" y="-68">frame_start[bs]!</label>
 		</transition>
 		<transition>
-			<source ref="id14"/>
-			<target ref="id14"/>
-			<label kind="guard" x="-450" y="-102">frame_clk[bs] &gt;= frame_size[bs]/2</label>
-			<label kind="synchronisation" x="-450" y="-119">frame_start[bs]!</label>
-			<label kind="assignment" x="-450" y="-85">frame_clk[bs] = 0</label>
-			<nail x="-459" y="-34"/>
-			<nail x="-459" y="-119"/>
+			<source ref="id21"/>
+			<target ref="id21"/>
+			<label kind="guard" x="-425" y="-68">frame_clk[bs] &gt;= frame_size[bs]/2</label>
+			<label kind="synchronisation" x="-425" y="-85">frame_start[bs]!</label>
+			<label kind="assignment" x="-425" y="-51">frame_clk[bs] = 0</label>
+			<nail x="-434" y="-17"/>
+			<nail x="-434" y="-110"/>
 		</transition>
 		<transition>
-			<source ref="id13"/>
-			<target ref="id15"/>
-			<label kind="synchronisation" x="-697" y="-153">transmit_ready[bs]?</label>
+			<source ref="id20"/>
+			<target ref="id22"/>
+			<label kind="synchronisation" x="-637" y="-153">ready[bs]?</label>
 		</transition>
 	</template>
 	<template>
@@ -913,302 +1122,278 @@ no need for extra scheduling.</label>
 
 const int qca_processing = 25;    // QCA processing time (in us)
 
-const int uart_speed = 6250;    // uart transmission speed (in kbit/s)
-
 // --------------------------------------------------------------------------------------------
 // VARIABLES
 // --------------------------------------------------------------------------------------------
 
 clock x;    // general utility timer
 
-int channel;    // BS DL channel
+int ch;    // BS DL channel
 
-slotID_t ue;    // current slot owner
+int ue;    // current slot owner
 
 UEid_t new;    // ID of current slot's owner (UE)
 
-int BCH_duration;
-
-int prob_success;
-
-int uart_latency;
-
 int slot = 0;    // slot counter during the frame execution
 
-bool success[slotID_t] = {false, false, false, false, false, false, false, false, false, false, false};
+bool success[slotID_t] = {false, false, false, false, false, false, false, false, false, false, false, false};
+
+int GI;
 
 // --------------------------------------------------------------------------------------------
 // FUNCTIONS
 // --------------------------------------------------------------------------------------------
 
-void getProbability()
-{
-    prob_success = connection_channel_stability[bs];
-}
-
-int getUARTTime()
-{
-    return getULAudioData(bs)/(uart_speed/1000);
-}
-
-int getDataType()
-{
-    int i = owner[bs][ue];
-    if(i &gt; number_UE &amp;&amp; static_profile[i] == RTa)
-        return true;
-    if(i &gt; number_UE &amp;&amp; static_profile[i] == sRTa)
-        return true;
-    if(i &gt; number_UE &amp;&amp; static_profile[i] == HqRTa)
-        return true;
-    if(i &gt; number_UE &amp;&amp; static_profile[i] == Listen_Only)
-        return true;
-    return false;
-}
-
 // --------------------------------------------------------------------------------------------
 // TODO
-// Have a transition with the reverse probability going to other location for failure handling
 // --------------------------------------------------------------------------------------------
 </declaration>
-		<location id="id16" x="-842" y="-1046" color="#ffffff">
+		<location id="id23" x="-842" y="-1046" color="#ffffff">
 			<name x="-867" y="-1079">INITIAL</name>
 			<urgent/>
 		</location>
-		<location id="id17" x="-170" y="-850">
-			<name x="-153" y="-867">READY</name>
+		<location id="id24" x="-323" y="-850">
+			<name x="-306" y="-867">READY</name>
 		</location>
-		<location id="id18" x="-170" y="-765" color="#6c3483">
-			<name x="-212" y="-748">TRANSMIT_BCH</name>
-			<label kind="invariant" x="-238" y="-730">frame_clk[bs] &lt;= BCH_duration</label>
-		</location>
-		<location id="id19" x="-841" y="-518" color="#ffa500">
-			<name x="-824" y="-535">WAIT_UL</name>
-			<label kind="invariant" x="-824" y="-518">x &lt;= slot_size[bs][ue]</label>
-		</location>
-		<location id="id20" x="-842" y="-850">
+		<location id="id25" x="-323" y="-740" color="#6c3483">
+			<name x="-306" y="-757">TRANSMIT_BCH</name>
 			<urgent/>
 		</location>
-		<location id="id21" x="-1139" y="-357" color="#00ff00">
-			<name x="-1164" y="-341">UL_ACK</name>
+		<location id="id26" x="-722" y="-468" color="#ffa500">
+			<name x="-705" y="-485">WAIT_UL</name>
+			<label kind="invariant" x="-705" y="-468">x &lt;= slot_size[bs][ue]</label>
+		</location>
+		<location id="id27" x="-842" y="-850">
 			<urgent/>
 		</location>
-		<location id="id22" x="-1139" y="-518" color="#00ffff">
-			<name x="-1165" y="-501">UL_NACK</name>
+		<location id="id28" x="-884" y="-306" color="#00ff00">
+			<name x="-909" y="-290">UL_ACK</name>
 			<urgent/>
 		</location>
-		<location id="id23" x="-1139" y="-765">
-			<name x="-1224" y="-799">NEXT_SLOT</name>
+		<location id="id29" x="-986" y="-467" color="#00ffff">
+			<name x="-1012" y="-450">UL_NACK</name>
 			<urgent/>
 		</location>
-		<location id="id24" x="-842" y="-961">
+		<location id="id30" x="-1139" y="-740">
+			<name x="-1224" y="-774">NEXT_SLOT</name>
+			<urgent/>
+		</location>
+		<location id="id31" x="-842" y="-961">
 			<name x="-960" y="-977">TRANSMISSION</name>
 			<urgent/>
 		</location>
-		<location id="id25" x="-502" y="-850" color="#ffff00">
+		<location id="id32" x="-502" y="-850" color="#ffff00">
 			<name x="-484" y="-875">RETRANSMISSION</name>
 			<urgent/>
 		</location>
-		<location id="id26" x="-842" y="-764">
-			<name x="-833" y="-799">GUARD</name>
-			<label kind="invariant" x="-824" y="-765">x' == 1 &amp;&amp;
-x &lt;= GI_size[bs]</label>
+		<location id="id33" x="-722" y="-740">
+			<name x="-748" y="-807">GUARD</name>
+			<label kind="invariant" x="-756" y="-790">x' == 1 &amp;&amp;
+x &lt;= GI</label>
 		</location>
-		<location id="id27" x="-680" y="-850">
+		<location id="id34" x="-680" y="-850">
 			<name x="-731" y="-901">SWITCH_CHANNEL</name>
 			<label kind="invariant" x="-731" y="-884">x &lt;= channel_switch</label>
 		</location>
-		<location id="id28" x="-841" y="-637" color="#ffa500">
-			<name x="-824" y="-662">WAIT_SLOT</name>
-			<label kind="invariant" x="-824" y="-645">frame_clk[bs] &lt;= slot_start[bs][ue]</label>
+		<location id="id35" x="-722" y="-612" color="#ffa500">
+			<name x="-705" y="-629">WAIT_SLOT</name>
+			<label kind="invariant" x="-705" y="-612">frame_clk[bs] &lt;= slot_start[bs][ue]</label>
 		</location>
-		<location id="id29" x="-1385" y="-357" color="#ff00ff">
-			<name x="-1512" y="-366">PROCESS_QCA</name>
-			<label kind="invariant" x="-1538" y="-349">x &lt;= qca_processing</label>
-			<label kind="comments" x="-1623" y="-365">Meta data</label>
+		<location id="id36" x="-1139" y="-306" color="#ff00ff">
+			<name x="-1190" y="-289">PROCESS_QCA</name>
+			<label kind="invariant" x="-1207" y="-272">x &lt;= qca_processing</label>
+			<label kind="comments" x="-1292" y="-280">Meta data</label>
 		</location>
-		<location id="id30" x="-1385" y="-518" color="#ff00ff">
-			<name x="-1547" y="-527">PROCESS_INTERNAL</name>
-			<label kind="comments" x="-1572" y="-552">DLC user data and audio</label>
+		<location id="id37" x="-1258" y="-468" color="#ff00ff">
+			<name x="-1334" y="-502">PROCESS_INTERNAL</name>
+			<label kind="comments" x="-1351" y="-527">DLC user data and audio</label>
 			<urgent/>
 		</location>
-		<location id="id31" x="-323" y="-960" color="#ffa500">
+		<location id="id38" x="-323" y="-960" color="#ffa500">
 			<name x="-365" y="-994">WAIT_READY</name>
 		</location>
-		<location id="id32" x="-501" y="-960" color="#ff00ff">
+		<location id="id39" x="-501" y="-960" color="#ff00ff">
 			<name x="-535" y="-1011">PREPARE</name>
 			<label kind="invariant" x="-527" y="-994">x' == 0</label>
 			<urgent/>
 		</location>
-		<location id="id33" x="-1266" y="-518">
+		<location id="id40" x="-1139" y="-468">
+			<label kind="invariant" x="-1190" y="-493">x' == 0</label>
 			<urgent/>
 		</location>
-		<branchpoint id="id34" x="-484" y="-765">
-		</branchpoint>
-		<init ref="id16"/>
+		<location id="id41" x="-1028" y="-612" color="#6c3483">
+			<name x="-1071" y="-646">TRANSMIT_DL</name>
+			<urgent/>
+		</location>
+		<location id="id42" x="-442" y="-740">
+			<label kind="invariant" x="-484" y="-723">frame_clk[bs] &lt;=
+BCH_duration[bs]</label>
+		</location>
+		<init ref="id23"/>
+		<transition>
+			<source ref="id25"/>
+			<target ref="id42"/>
+			<label kind="synchronisation" x="-408" y="-756">BCH[ch]!</label>
+		</transition>
+		<transition>
+			<source ref="id41"/>
+			<target ref="id40"/>
+			<label kind="synchronisation" x="-1105" y="-612">BCH[ch]!</label>
+			<nail x="-1113" y="-612"/>
+		</transition>
+		<transition>
+			<source ref="id35"/>
+			<target ref="id41"/>
+			<label kind="guard" x="-952" y="-612">ue == number_UE &amp;&amp;
+frame_clk[bs] &gt;= slot_start[bs][ue]</label>
+		</transition>
+		<transition>
+			<source ref="id40"/>
+			<target ref="id30"/>
+			<label kind="assignment" x="-1207" y="-621">slot += 1,
+x = 0</label>
+		</transition>
+		<transition>
+			<source ref="id36"/>
+			<target ref="id40"/>
+			<label kind="guard" x="-1130" y="-408">x &gt;= qca_processing &amp;&amp;
+profile[ue] == 0</label>
+			<nail x="-1139" y="-349"/>
+		</transition>
+		<transition>
+			<source ref="id31"/>
+			<target ref="id39"/>
+		</transition>
+		<transition>
+			<source ref="id38"/>
+			<target ref="id24"/>
+			<label kind="synchronisation" x="-314" y="-926">ready[bs]?</label>
+		</transition>
+		<transition>
+			<source ref="id37"/>
+			<target ref="id40"/>
+		</transition>
+		<transition>
+			<source ref="id36"/>
+			<target ref="id37"/>
+			<label kind="guard" x="-1300" y="-408">x &gt;= qca_processing &amp;&amp;
+profile[ue] != 0</label>
+			<label kind="synchronisation" x="-1300" y="-374">BS_process[bs]!</label>
+			<nail x="-1258" y="-306"/>
+		</transition>
+		<transition>
+			<source ref="id35"/>
+			<target ref="id26"/>
+			<label kind="guard" x="-714" y="-570">ue != number_UE &amp;&amp;
+frame_clk[bs] &gt;= slot_start[bs][ue]</label>
+			<label kind="assignment" x="-714" y="-536">x = 0</label>
+		</transition>
 		<transition>
 			<source ref="id34"/>
-			<target ref="id26"/>
-			<label kind="probability" x="-688" y="-705">100 - prob_success</label>
-			<nail x="-484" y="-705"/>
-			<nail x="-714" y="-705"/>
+			<target ref="id32"/>
+			<label kind="guard" x="-663" y="-850">x &gt;= channel_switch</label>
+			<label kind="assignment" x="-663" y="-833">x = 0,
+ch = channel[bs][retransmission[bs]]</label>
 		</transition>
 		<transition>
 			<source ref="id33"/>
-			<target ref="id23"/>
-			<label kind="assignment" x="-1258" y="-765">slot += 1</label>
-			<nail x="-1266" y="-765"/>
+			<target ref="id35"/>
+			<label kind="guard" x="-884" y="-722">slot &lt; number_slots[bs] &amp;&amp;
+x &gt;= GI</label>
+			<label kind="assignment" x="-884" y="-688">current_slot[bs] = slot,
+ue = owner[bs][slot],
+GI = GI_size[bs]</label>
+		</transition>
+		<transition>
+			<source ref="id32"/>
+			<target ref="id39"/>
+		</transition>
+		<transition>
+			<source ref="id39"/>
+			<target ref="id38"/>
+			<label kind="synchronisation" x="-459" y="-960">schedule[bs]!</label>
+		</transition>
+		<transition>
+			<source ref="id27"/>
+			<target ref="id34"/>
+			<label kind="guard" x="-816" y="-850">retransmission[bs]</label>
+		</transition>
+		<transition>
+			<source ref="id27"/>
+			<target ref="id31"/>
+			<label kind="guard" x="-969" y="-918">!retransmission[bs]</label>
+			<label kind="assignment" x="-1062" y="-901">ch = channel[bs][retransmission[bs]]</label>
+		</transition>
+		<transition>
+			<source ref="id33"/>
+			<target ref="id27"/>
+			<label kind="guard" x="-1011" y="-824">slot &gt;= number_slots[bs] &amp;&amp;
+x &gt;= GI</label>
+			<label kind="assignment" x="-1079" y="-807">x = 0,
+retransmission[bs] = !retransmission[bs]</label>
+			<nail x="-841" y="-765"/>
+		</transition>
+		<transition>
+			<source ref="id26"/>
+			<target ref="id28"/>
+			<label kind="guard" x="-714" y="-375">owner[bs][slot] == RACH_slot[bs]</label>
+			<label kind="synchronisation" x="-714" y="-358">RACH[bs]?</label>
+			<label kind="assignment" x="-714" y="-341">ue = RACH_id[bs],
+addUE(bs, ue)</label>
+			<nail x="-723" y="-307"/>
 		</transition>
 		<transition>
 			<source ref="id29"/>
-			<target ref="id33"/>
-			<label kind="guard" x="-1258" y="-467">x &gt;= qca_processing &amp;&amp;
-profile[ue] != 0</label>
-			<nail x="-1266" y="-399"/>
+			<target ref="id40"/>
 		</transition>
 		<transition>
-			<source ref="id24"/>
-			<target ref="id32"/>
-		</transition>
-		<transition>
-			<source ref="id31"/>
-			<target ref="id17"/>
-			<label kind="synchronisation" x="-331" y="-850">retransmit_ready[bs]?</label>
-			<nail x="-323" y="-850"/>
-		</transition>
-		<transition>
-			<source ref="id31"/>
-			<target ref="id17"/>
-			<label kind="synchronisation" x="-306" y="-960">transmit_ready[bs]?</label>
-			<nail x="-170" y="-960"/>
+			<source ref="id28"/>
+			<target ref="id36"/>
+			<label kind="assignment" x="-1105" y="-348">x = 0,
+ACK[ue] = 1,
+GI = GI_size[bs] - qca_processing</label>
 		</transition>
 		<transition>
 			<source ref="id30"/>
 			<target ref="id33"/>
 		</transition>
 		<transition>
-			<source ref="id29"/>
-			<target ref="id30"/>
-			<label kind="guard" x="-1555" y="-467">x &gt;= qca_processing &amp;&amp;
-profile[ue] == 0</label>
-			<label kind="synchronisation" x="-1487" y="-425">processing[bs]!</label>
-		</transition>
-		<transition>
-			<source ref="id34"/>
-			<target ref="id26"/>
-			<label kind="synchronisation" x="-688" y="-748">BCH[channel]!</label>
-			<label kind="probability" x="-688" y="-765">prob_success</label>
-		</transition>
-		<transition>
-			<source ref="id28"/>
-			<target ref="id19"/>
-			<label kind="guard" x="-833" y="-595">frame_clk[bs] &gt;= slot_start[bs][ue]</label>
-			<label kind="assignment" x="-833" y="-578">x = 0</label>
-		</transition>
-		<transition>
-			<source ref="id27"/>
-			<target ref="id25"/>
-			<label kind="guard" x="-663" y="-841">x &gt;= channel_switch</label>
-			<label kind="assignment" x="-663" y="-824">x = 0,
-channel = retransmission_channel[bs]</label>
+			<source ref="id26"/>
+			<target ref="id29"/>
+			<label kind="guard" x="-918" y="-493">x &gt;= slot_size[bs][ue]</label>
 		</transition>
 		<transition>
 			<source ref="id26"/>
 			<target ref="id28"/>
-			<label kind="guard" x="-952" y="-714">x &gt;= GI_size[bs]</label>
-			<label kind="assignment" x="-986" y="-697">current_slot[bs] = slot,
-ue = owner[bs][slot]</label>
+			<label kind="synchronisation" x="-833" y="-365">UTCH[bs][ue]?</label>
+			<nail x="-739" y="-339"/>
+			<nail x="-841" y="-339"/>
 		</transition>
 		<transition>
-			<source ref="id25"/>
-			<target ref="id32"/>
+			<source ref="id26"/>
+			<target ref="id28"/>
+			<label kind="synchronisation" x="-841" y="-408">UCCH[bs][ue]?</label>
+			<nail x="-748" y="-383"/>
+			<nail x="-841" y="-382"/>
 		</transition>
 		<transition>
-			<source ref="id32"/>
-			<target ref="id31"/>
-			<label kind="synchronisation" x="-459" y="-960">schedule[bs]!</label>
-		</transition>
-		<transition>
-			<source ref="id20"/>
-			<target ref="id27"/>
-			<label kind="guard" x="-816" y="-850">retransmission[bs]</label>
-		</transition>
-		<transition>
-			<source ref="id20"/>
-			<target ref="id24"/>
-			<label kind="guard" x="-969" y="-918">!retransmission[bs]</label>
-			<label kind="assignment" x="-1054" y="-901">channel = broadcast_channel[bs]</label>
-		</transition>
-		<transition>
-			<source ref="id23"/>
-			<target ref="id20"/>
-			<label kind="guard" x="-1130" y="-850">slot &gt;= number_slots[bs]</label>
-			<label kind="assignment" x="-1130" y="-833">x = 0,
-retransmission[bs] = !retransmission[bs]</label>
-			<nail x="-1139" y="-850"/>
-		</transition>
-		<transition>
-			<source ref="id19"/>
-			<target ref="id21"/>
-			<label kind="guard" x="-833" y="-425">owner[bs][slot] == RACH_slot[bs]</label>
-			<label kind="synchronisation" x="-833" y="-408">RACH[bs]?</label>
-			<label kind="assignment" x="-833" y="-391">add_UE(bs, RACH_id[bs]),
-ue = RACH_id[bs]</label>
-			<nail x="-842" y="-357"/>
-		</transition>
-		<transition>
-			<source ref="id22"/>
-			<target ref="id23"/>
-		</transition>
-		<transition>
-			<source ref="id21"/>
-			<target ref="id29"/>
-			<label kind="assignment" x="-1317" y="-357">x = 0,
-RACH_id[bs] = -1</label>
-		</transition>
-		<transition>
-			<source ref="id23"/>
-			<target ref="id26"/>
-			<label kind="guard" x="-1113" y="-756">slot &lt; number_slots[bs]</label>
-		</transition>
-		<transition>
-			<source ref="id19"/>
-			<target ref="id22"/>
-			<label kind="guard" x="-1071" y="-578">x &gt;= slot_size[bs][ue]</label>
-			<label kind="assignment" x="-1071" y="-560">slot += 1,
-x = 0</label>
-		</transition>
-		<transition>
-			<source ref="id19"/>
-			<target ref="id21"/>
-			<label kind="synchronisation" x="-1045" y="-425">UTCH[bs][ue]?</label>
-			<nail x="-884" y="-399"/>
-			<nail x="-1062" y="-399"/>
-		</transition>
-		<transition>
-			<source ref="id19"/>
-			<target ref="id21"/>
-			<label kind="synchronisation" x="-1054" y="-467">UCCH[bs][ue]?</label>
-			<nail x="-901" y="-442"/>
-			<nail x="-1062" y="-442"/>
-		</transition>
-		<transition>
-			<source ref="id18"/>
-			<target ref="id34"/>
-			<label kind="guard" x="-450" y="-765">frame_clk[bs] &gt;= BCH_duration</label>
-			<label kind="assignment" x="-450" y="-748">getProbability(),
+			<source ref="id42"/>
+			<target ref="id33"/>
+			<label kind="guard" x="-629" y="-756">frame_clk[bs] &gt;=
+BCH_duration[bs]</label>
+			<label kind="assignment" x="-629" y="-722">GI = GI_size[bs],
 slot = 0,
 x = 0</label>
 		</transition>
 		<transition>
-			<source ref="id17"/>
-			<target ref="id18"/>
-			<label kind="synchronisation" x="-161" y="-833">frame_start[bs]?</label>
-			<label kind="assignment" x="-161" y="-816">BCH_duration = getBCHDuration(bs)</label>
+			<source ref="id24"/>
+			<target ref="id25"/>
+			<label kind="synchronisation" x="-314" y="-807">frame_start[bs]?</label>
 		</transition>
 		<transition>
-			<source ref="id16"/>
-			<target ref="id24"/>
-			<label kind="assignment" x="-1054" y="-1020">channel = broadcast_channel[bs]</label>
+			<source ref="id23"/>
+			<target ref="id31"/>
+			<label kind="assignment" x="-833" y="-1020">ch = channel[bs][0]</label>
 		</transition>
 	</template>
 	<template>
@@ -1230,11 +1415,13 @@ clock x;    // latency timer
 clock z;    // disconnect timer
 
 int bs;    // BS that this UE is connected to
-int channel;    // BS DL channel
+int ch;    // BS DL channel
 
 int prob_success;
 
 int uart_latency;
+
+int24_t sleep_time;
 
 // --------------------------------------------------------------------------------------------
 // FUNCTIONS
@@ -1245,157 +1432,213 @@ void getProbability()
     prob_success = channel_interference_probability[id];
 }
 </declaration>
-		<location id="id35" x="-1836" y="-1495" color="#ffffff">
-			<name x="-1904" y="-1513">INITIAL</name>
-			<label kind="invariant" x="-1912" y="-1496">x' == 0 &amp;&amp;
+		<location id="id43" x="-1462" y="-1938" color="#ffffff">
+			<name x="-1487" y="-2006">INITIAL</name>
+			<label kind="invariant" x="-1487" y="-1989">x' == 0 &amp;&amp;
 z' == 0</label>
 		</location>
-		<location id="id36" x="-1198" y="-1496" color="#138d75">
-			<name x="-1223" y="-1480">BCH_ACK</name>
-			<label kind="invariant" x="-1223" y="-1463">z' == 0</label>
+		<location id="id44" x="-1462" y="-1572" color="#138d75">
+			<name x="-1547" y="-1589">BCH_ACK</name>
+			<label kind="invariant" x="-1547" y="-1572">z' == 0</label>
 			<urgent/>
 		</location>
-		<location id="id37" x="-1198" y="-1683" color="#ffa500">
-			<name x="-1241" y="-1657">WAIT_SLOT</name>
-			<label kind="invariant" x="-1292" y="-1640">frame_clk[bs] &lt;= slot_start[bs][id]</label>
+		<location id="id45" x="-1674" y="-1462" color="#ffa500">
+			<name x="-1768" y="-1479">WAIT_SLOT</name>
+			<label kind="invariant" x="-1895" y="-1462">frame_clk[bs] &lt;= slot_start[bs][id]</label>
 		</location>
-		<location id="id38" x="-1513" y="-1385" color="#3498db">
-			<name x="-1496" y="-1402">BCH_NACK</name>
+		<location id="id46" x="-1266" y="-1682" color="#3498db">
+			<name x="-1300" y="-1665">BCH_NACK</name>
 			<urgent/>
 		</location>
-		<location id="id39" x="-1667" y="-1496" color="#ffa500">
-			<name x="-1751" y="-1555">WAIT_BCH</name>
-			<label kind="invariant" x="-1751" y="-1538">x &lt;= getLatency(id) &amp;&amp;
+		<location id="id47" x="-1462" y="-1776" color="#ffa500">
+			<name x="-1547" y="-1776">WAIT_BCH</name>
+			<label kind="invariant" x="-1623" y="-1759">x &lt;= getLatency(id) &amp;&amp;
 z &lt;= disconnect_timeout</label>
 		</location>
-		<location id="id40" x="-1666" y="-1385" color="#4e342e">
-			<name x="-1717" y="-1402">FAIL</name>
-			<label kind="invariant" x="-1725" y="-1385">z' == 1</label>
+		<location id="id48" x="-1113" y="-1682" color="#4e342e">
+			<name x="-1130" y="-1665">FAIL</name>
+			<label kind="invariant" x="-1130" y="-1648">z' == 1</label>
 			<urgent/>
 		</location>
-		<location id="id41" x="-1666" y="-1683" color="#4e342e">
-			<name x="-1707" y="-1718">DISCONNECT</name>
+		<location id="id49" x="-1666" y="-1819" color="#4e342e">
+			<name x="-1707" y="-1803">DISCONNECT</name>
 			<urgent/>
 		</location>
-		<location id="id42" x="-1453" y="-1683" color="#6c3483">
-			<name x="-1487" y="-1734">TRANSMIT</name>
-			<label kind="invariant" x="-1512" y="-1717">x &lt;= slot_size[bs][id]/2</label>
+		<location id="id50" x="-1674" y="-1589" color="#6c3483">
+			<name x="-1759" y="-1615">TRANSMIT</name>
+			<label kind="invariant" x="-1827" y="-1598">x &lt;= slot_size[bs][id]/2</label>
 		</location>
-		<location id="id43" x="-1003" y="-1496" color="#ff00ff">
-			<name x="-1045" y="-1478">PROCESS_QCA</name>
-			<label kind="invariant" x="-1054" y="-1461">x &lt;= qca_processing</label>
-			<label kind="comments" x="-1028" y="-1436">Meta data</label>
+		<location id="id51" x="-1462" y="-1427" color="#ff00ff">
+			<name x="-1445" y="-1445">PROCESS_QCA</name>
+			<label kind="invariant" x="-1445" y="-1427">x &lt;= qca_processing</label>
+			<label kind="comments" x="-1309" y="-1428">Meta data</label>
 		</location>
-		<location id="id44" x="-773" y="-1496">
-			<name x="-807" y="-1479">TRANSFER</name>
-			<label kind="comments" x="-833" y="-1453">QCA to host processor</label>
+		<location id="id52" x="-1462" y="-1351">
+			<name x="-1445" y="-1360">TRANSFER</name>
+			<label kind="comments" x="-1445" y="-1377">QCA to host processor</label>
 			<urgent/>
 		</location>
-		<location id="id45" x="-773" y="-1683" color="#ff00ff">
-			<name x="-756" y="-1708">PROCESS_INTERNAL</name>
-			<label kind="comments" x="-756" y="-1683">DLC user data and audio</label>
+		<location id="id53" x="-1674" y="-1351" color="#ff00ff">
+			<name x="-1742" y="-1334">PROCESS_INTERNAL</name>
+			<label kind="comments" x="-1751" y="-1309">DLC user data and audio</label>
 			<urgent/>
 		</location>
-		<branchpoint id="id46" x="-1453" y="-1614">
+		<location id="id54" x="-1215" y="-1572" color="#ca6f1e">
+			<name x="-1241" y="-1623">SLEEP</name>
+			<label kind="invariant" x="-1266" y="-1606">x &lt;= sleep_time</label>
+		</location>
+		<location id="id55" x="-1071" y="-1572">
+			<urgent/>
+		</location>
+		<location id="id56" x="-1215" y="-1496">
+			<urgent/>
+		</location>
+		<branchpoint id="id57" x="-1462" y="-1682">
 		</branchpoint>
-		<init ref="id35"/>
+		<branchpoint id="id58" x="-1674" y="-1683">
+		</branchpoint>
+		<init ref="id43"/>
 		<transition>
-			<source ref="id46"/>
-			<target ref="id39"/>
-			<label kind="probability" x="-1589" y="-1615">100 - prob_success</label>
-			<nail x="-1589" y="-1615"/>
+			<source ref="id56"/>
+			<target ref="id54"/>
+			<label kind="guard" x="-1207" y="-1547">sleep_time &gt; 0</label>
+			<label kind="synchronisation" x="-1207" y="-1530">sleep[id]!</label>
 		</transition>
 		<transition>
-			<source ref="id36"/>
-			<target ref="id43"/>
+			<source ref="id56"/>
+			<target ref="id55"/>
+			<label kind="guard" x="-1164" y="-1497">sleep_time &lt; 0</label>
+			<nail x="-1071" y="-1496"/>
 		</transition>
 		<transition>
-			<source ref="id45"/>
-			<target ref="id37"/>
-			<label kind="guard" x="-1139" y="-1683">retransmission[bs]</label>
-			<label kind="assignment" x="-1139" y="-1666">channel = retransmission_channel[bs]</label>
-		</transition>
-		<transition>
-			<source ref="id46"/>
-			<target ref="id39"/>
-			<label kind="synchronisation" x="-1445" y="-1572">UCCH[bs][id]!</label>
-			<label kind="probability" x="-1445" y="-1589">prob_success</label>
-			<nail x="-1453" y="-1538"/>
-		</transition>
-		<transition>
-			<source ref="id42"/>
-			<target ref="id46"/>
-			<label kind="guard" x="-1598" y="-1666">x &gt;= slot_size[bs][id]/2</label>
-			<label kind="assignment" x="-1496" y="-1649">x = 0</label>
-		</transition>
-		<transition>
-			<source ref="id41"/>
-			<target ref="id35"/>
-			<label kind="synchronisation" x="-1826" y="-1701">disconnected[id]!</label>
-			<label kind="assignment" x="-1827" y="-1683">z = 0,
-x = 0</label>
-			<nail x="-1834" y="-1682"/>
-		</transition>
-		<transition>
-			<source ref="id35"/>
-			<target ref="id39"/>
-			<label kind="synchronisation" x="-1802" y="-1496">listen[id]?</label>
-			<label kind="assignment" x="-1802" y="-1479">x = 0,
-bs = getBS(id),
-channel = broadcast_channel[bs]</label>
-		</transition>
-		<transition>
-			<source ref="id45"/>
-			<target ref="id37"/>
-			<label kind="guard" x="-986" y="-1827">!retransmission[bs]</label>
-			<label kind="assignment" x="-986" y="-1810">channel = broadcast_channel[bs]</label>
-			<nail x="-773" y="-1785"/>
-			<nail x="-1198" y="-1785"/>
-		</transition>
-		<transition>
-			<source ref="id37"/>
-			<target ref="id42"/>
-			<label kind="guard" x="-1428" y="-1683">frame_clk[bs] &gt;= slot_start[bs][id]</label>
-			<label kind="assignment" x="-1428" y="-1666">x = 0,
-getProbability()</label>
-		</transition>
-		<transition>
-			<source ref="id40"/>
-			<target ref="id39"/>
-		</transition>
-		<transition>
-			<source ref="id39"/>
-			<target ref="id36"/>
-			<label kind="guard" x="-1513" y="-1496">x &lt;= getLatency(id)</label>
-			<label kind="synchronisation" x="-1513" y="-1513">BCH[channel]?</label>
-			<label kind="assignment" x="-1513" y="-1479">z = 0</label>
-		</transition>
-		<transition>
-			<source ref="id38"/>
-			<target ref="id40"/>
-			<label kind="synchronisation" x="-1623" y="-1402">failed[id]!</label>
-			<label kind="assignment" x="-1623" y="-1385">z = x</label>
-		</transition>
-		<transition>
-			<source ref="id39"/>
-			<target ref="id38"/>
-			<label kind="guard" x="-1504" y="-1428">x &gt;= getLatency(id)</label>
-			<nail x="-1513" y="-1436"/>
-		</transition>
-		<transition>
-			<source ref="id39"/>
-			<target ref="id41"/>
-			<label kind="guard" x="-1768" y="-1615">z &gt;= disconnect_timeout</label>
-		</transition>
-		<transition>
-			<source ref="id43"/>
-			<target ref="id44"/>
-			<label kind="assignment" x="-901" y="-1521">x = 0</label>
+			<source ref="id54"/>
+			<target ref="id55"/>
+			<label kind="guard" x="-1198" y="-1589">x &gt;= sleep_time</label>
+			<label kind="synchronisation" x="-1190" y="-1572">wake_up[id]!</label>
 		</transition>
 		<transition>
 			<source ref="id44"/>
+			<target ref="id56"/>
+			<label kind="guard" x="-1419" y="-1496">!dedicatedSlot(bs, id)</label>
+			<label kind="assignment" x="-1419" y="-1479">sleep_time = getSleepTime(id)</label>
+			<nail x="-1428" y="-1496"/>
+		</transition>
+		<transition>
+			<source ref="id44"/>
+			<target ref="id54"/>
+			<label kind="guard" x="-1411" y="-1589">!retransmission[bs] &amp;&amp;
+ACK[id]</label>
+			<label kind="synchronisation" x="-1411" y="-1555">sleep[id]!</label>
+			<label kind="assignment" x="-1411" y="-1538">sleep_time = getSleepTime(id)</label>
+		</transition>
+		<transition>
+			<source ref="id55"/>
+			<target ref="id47"/>
+			<nail x="-1071" y="-1836"/>
+			<nail x="-1436" y="-1836"/>
+		</transition>
+		<transition>
+			<source ref="id57"/>
+			<target ref="id44"/>
+			<label kind="probability" x="-1453" y="-1640">prob_success</label>
+		</transition>
+		<transition>
+			<source ref="id57"/>
+			<target ref="id46"/>
+			<label kind="probability" x="-1428" y="-1700">100 - prob_success</label>
+		</transition>
+		<transition>
+			<source ref="id58"/>
+			<target ref="id47"/>
+			<label kind="probability" x="-1802" y="-1759">100 - prob_success</label>
+			<nail x="-1674" y="-1776"/>
+		</transition>
+		<transition>
+			<source ref="id44"/>
+			<target ref="id51"/>
+		</transition>
+		<transition>
+			<source ref="id58"/>
+			<target ref="id47"/>
+			<label kind="synchronisation" x="-1623" y="-1683">UCCH[bs][id]!</label>
+			<label kind="probability" x="-1623" y="-1700">prob_success</label>
+			<nail x="-1487" y="-1683"/>
+		</transition>
+		<transition>
+			<source ref="id50"/>
+			<target ref="id58"/>
+			<label kind="guard" x="-1819" y="-1666">x &gt;= slot_size[bs][id]/2</label>
+			<label kind="assignment" x="-1819" y="-1649">x = 0</label>
+		</transition>
+		<transition>
+			<source ref="id49"/>
+			<target ref="id43"/>
+			<label kind="synchronisation" x="-1657" y="-1955">disconnected[id]!</label>
+			<label kind="assignment" x="-1656" y="-1939">z = 0,
+x = 0</label>
+			<nail x="-1664" y="-1939"/>
+		</transition>
+		<transition>
+			<source ref="id43"/>
+			<target ref="id47"/>
+			<label kind="synchronisation" x="-1453" y="-1921">listen[id]?</label>
+			<label kind="assignment" x="-1453" y="-1904">x = 0,
+bs = getBS(id),
+ch = channel[bs][retransmission[bs]]</label>
+		</transition>
+		<transition>
+			<source ref="id53"/>
 			<target ref="id45"/>
-			<label kind="synchronisation" x="-765" y="-1581">processing[id]!</label>
+			<label kind="assignment" x="-1904" y="-1411">ch = channel[bs][retransmission[bs]]</label>
+		</transition>
+		<transition>
+			<source ref="id45"/>
+			<target ref="id50"/>
+			<label kind="guard" x="-1887" y="-1547">frame_clk[bs] &gt;= slot_start[bs][id]</label>
+			<label kind="assignment" x="-1887" y="-1530">x = 0,
+getProbability()</label>
+		</transition>
+		<transition>
+			<source ref="id48"/>
+			<target ref="id47"/>
+			<nail x="-1113" y="-1819"/>
+			<nail x="-1436" y="-1819"/>
+		</transition>
+		<transition>
+			<source ref="id47"/>
+			<target ref="id57"/>
+			<label kind="guard" x="-1453" y="-1759">x &lt;= getLatency(id)</label>
+			<label kind="synchronisation" x="-1453" y="-1742">BCH[ch]?</label>
+			<label kind="assignment" x="-1453" y="-1725">z = 0</label>
+		</transition>
+		<transition>
+			<source ref="id46"/>
+			<target ref="id48"/>
+			<label kind="synchronisation" x="-1215" y="-1700">failed[id]!</label>
+			<label kind="assignment" x="-1207" y="-1682">z = x</label>
+		</transition>
+		<transition>
+			<source ref="id47"/>
+			<target ref="id46"/>
+			<label kind="guard" x="-1394" y="-1776">x &gt;= getLatency(id)</label>
+			<nail x="-1266" y="-1776"/>
+		</transition>
+		<transition>
+			<source ref="id47"/>
+			<target ref="id49"/>
+			<label kind="guard" x="-1649" y="-1844">z &gt;= disconnect_timeout</label>
+			<nail x="-1487" y="-1819"/>
+		</transition>
+		<transition>
+			<source ref="id51"/>
+			<target ref="id52"/>
+			<label kind="guard" x="-1598" y="-1411">x &gt;= qca_processing</label>
+			<label kind="assignment" x="-1504" y="-1394">x = 0</label>
+		</transition>
+		<transition>
+			<source ref="id52"/>
+			<target ref="id53"/>
+			<label kind="synchronisation" x="-1615" y="-1368">UE_process[id]!</label>
 		</transition>
 	</template>
 	<template>
@@ -1413,10 +1656,14 @@ const int qca_latency = 50;    // QCA processing time (in us)
 
 clock x;    // general utility timer
 
+clock z;    // disconnect timer
+
 int prob_success;
 
 int bs;    // BS that this UE is connected to
-int channel;    // BS DL channel
+int ch;    // BS DL channel
+
+int24_t sleep_time;
 
 // --------------------------------------------------------------------------------------------
 // FUNCTIONS
@@ -1431,168 +1678,172 @@ void getProbability()
 // TODO
 // --------------------------------------------------------------------------------------------
 </declaration>
-		<location id="id47" x="246" y="509">
-			<name x="170" y="501">STREAM</name>
+		<location id="id59" x="732" y="85" color="#ffffff">
+			<name x="714" y="17">INITIAL</name>
+			<label kind="invariant" x="714" y="34">x' == 0 &amp;&amp;
+z' == 0</label>
 		</location>
-		<location id="id48" x="246" y="306">
+		<location id="id60" x="731" y="408" color="#138d75">
+			<name x="756" y="399">BCH_ACK</name>
 			<urgent/>
 		</location>
-		<location id="id49" x="8" y="306" color="#ffffff">
-			<name x="-10" y="255">INITIAL</name>
-			<label kind="invariant" x="-10" y="272">x' == 0</label>
+		<location id="id61" x="994" y="424" color="#ffa500">
+			<name x="1011" y="407">WAIT_SLOT</name>
+			<label kind="invariant" x="1011" y="424">x &lt;= slot_start[bs][id]</label>
 		</location>
-		<location id="id50" x="909" y="238" color="#138d75">
-			<name x="884" y="255">BCH_ACK</name>
+		<location id="id62" x="731" y="238" color="#ffa500">
+			<name x="646" y="195">WAIT_BCH</name>
+			<label kind="invariant" x="569" y="212">z &lt;= disconnect_timeout</label>
+		</location>
+		<location id="id63" x="365" y="85" color="#4e342e">
+			<name x="255" y="68">DISCONNECT</name>
 			<urgent/>
 		</location>
-		<location id="id51" x="909" y="93" color="#ffa500">
-			<name x="867" y="42">WAIT_SLOT</name>
-			<label kind="invariant" x="833" y="59">x &lt;= slot_start[bs][id]</label>
+		<location id="id64" x="994" y="331" color="#6c3483">
+			<name x="1011" y="314">TRANSMIT</name>
+			<label kind="invariant" x="1011" y="331">x &lt;= slot_size[bs][id]/2</label>
 		</location>
-		<location id="id52" x="484" y="238" color="#ffa500">
-			<name x="493" y="246">WAIT_BCH</name>
-			<label kind="invariant" x="493" y="263">x &lt;= disconnect_timeout</label>
+		<location id="id65" x="994" y="501" color="#ff00ff">
+			<name x="1011" y="493">PREPARE</name>
+			<label kind="invariant" x="1011" y="510">x &lt;= qca_latency</label>
 		</location>
-		<location id="id53" x="484" y="475" color="#4e342e">
-			<name x="501" y="450">DISCONNECT</name>
+		<location id="id66" x="365" y="238" color="#0000ff">
+			<name x="272" y="229">BCH_NACK</name>
 			<urgent/>
 		</location>
-		<location id="id54" x="688" y="93" color="#6c3483">
-			<name x="654" y="42">TRANSMIT</name>
-			<label kind="invariant" x="629" y="59">x &lt;= slot_size[bs][id]/2</label>
+		<location id="id67" x="501" y="408" color="#ca6f1e">
+			<name x="433" y="391">SLEEP</name>
+			<label kind="invariant" x="382" y="408">x &lt;= sleep_time</label>
 		</location>
-		<location id="id55" x="306" y="391">
-			<name x="255" y="399">LISTEN</name>
-		</location>
-		<location id="id56" x="246" y="238">
-			<name x="221" y="204">JOINED</name>
+		<location id="id68" x="501" y="502">
 			<urgent/>
 		</location>
-		<location id="id57" x="909" y="178" color="#ff00ff">
-			<name x="824" y="169">PREPARE</name>
-			<label kind="invariant" x="782" y="187">x &lt;= qca_latency</label>
-		</location>
-		<location id="id58" x="484" y="357" color="#0000ff">
-			<name x="501" y="348">BCH_NACK</name>
+		<location id="id69" x="731" y="297">
 			<urgent/>
 		</location>
-		<branchpoint id="id59" x="484" y="93">
+		<branchpoint id="id70" x="731" y="340">
 		</branchpoint>
-		<init ref="id49"/>
+		<branchpoint id="id71" x="994" y="238">
+		</branchpoint>
+		<init ref="id59"/>
 		<transition>
-			<source ref="id59"/>
-			<target ref="id52"/>
-			<label kind="probability" x="348" y="68">100 - prob_success</label>
-			<nail x="348" y="93"/>
-			<nail x="348" y="178"/>
+			<source ref="id69"/>
+			<target ref="id70"/>
 		</transition>
 		<transition>
-			<source ref="id58"/>
-			<target ref="id53"/>
-			<label kind="synchronisation" x="493" y="408">disconnected[id]!</label>
+			<source ref="id68"/>
+			<target ref="id62"/>
+			<label kind="guard" x="365" y="502">sleep_time &lt;= 0</label>
+			<nail x="357" y="502"/>
+			<nail x="357" y="289"/>
 		</transition>
 		<transition>
-			<source ref="id50"/>
-			<target ref="id57"/>
-			<label kind="guard" x="960" y="238">retransmission[bs]</label>
-			<label kind="assignment" x="960" y="255">channel = retransmission_channel[bs]</label>
-			<nail x="1071" y="238"/>
-			<nail x="1071" y="178"/>
+			<source ref="id70"/>
+			<target ref="id60"/>
+			<label kind="assignment" x="739" y="374">z = 0</label>
+			<label kind="probability" x="739" y="357">prob_success</label>
 		</transition>
 		<transition>
-			<source ref="id57"/>
-			<target ref="id51"/>
-			<label kind="guard" x="918" y="119">x &gt;= qca_latency</label>
-			<label kind="synchronisation" x="918" y="136">processing[id]!</label>
+			<source ref="id70"/>
+			<target ref="id66"/>
+			<label kind="probability" x="578" y="340">100 - prob_success</label>
+			<nail x="365" y="340"/>
 		</transition>
 		<transition>
-			<source ref="id56"/>
-			<target ref="id52"/>
-			<label kind="assignment" x="340" y="221">x = 0</label>
+			<source ref="id60"/>
+			<target ref="id67"/>
+			<label kind="guard" x="527" y="391">!retransmission[bs] &amp;&amp;
+ACK[id]</label>
+			<label kind="synchronisation" x="527" y="425">sleep[id]!</label>
+			<label kind="assignment" x="527" y="442">sleep_time = getSleepTime(id)</label>
 		</transition>
 		<transition>
-			<source ref="id48"/>
-			<target ref="id56"/>
-			<label kind="guard" x="127" y="263">profile[id] == initial</label>
+			<source ref="id68"/>
+			<target ref="id67"/>
+			<label kind="guard" x="399" y="442">sleep_time &gt; 0</label>
+			<label kind="synchronisation" x="399" y="459">sleep[id]!</label>
 		</transition>
 		<transition>
-			<source ref="id55"/>
-			<target ref="id53"/>
-			<label kind="synchronisation" x="323" y="458">disconnected[id]?</label>
-			<nail x="306" y="475"/>
+			<source ref="id67"/>
+			<target ref="id62"/>
+			<label kind="guard" x="399" y="366">x &gt;= sleep_time</label>
+			<label kind="synchronisation" x="416" y="349">wake_up[id]!</label>
+			<nail x="501" y="280"/>
 		</transition>
 		<transition>
-			<source ref="id48"/>
-			<target ref="id55"/>
-			<label kind="guard" x="280" y="280">static_profile[id] == Listen_Only</label>
-			<label kind="synchronisation" x="314" y="314">listen[id]!</label>
-			<label kind="assignment" x="314" y="297">profile[id] = Listen_Only</label>
-			<nail x="306" y="306"/>
+			<source ref="id71"/>
+			<target ref="id62"/>
+			<label kind="probability" x="816" y="221">100 - prob_success</label>
 		</transition>
 		<transition>
-			<source ref="id47"/>
-			<target ref="id53"/>
-			<label kind="synchronisation" x="263" y="492">disconnected[id]?</label>
-			<nail x="484" y="509"/>
+			<source ref="id66"/>
+			<target ref="id63"/>
+			<label kind="synchronisation" x="255" y="195">disconnected[id]!</label>
 		</transition>
 		<transition>
-			<source ref="id48"/>
-			<target ref="id47"/>
-			<label kind="guard" x="68" y="391">static_profile[id] == RTa ||
-static_profile[id] == HqRTa</label>
-			<label kind="synchronisation" x="170" y="450">stream[id]!</label>
-			<label kind="assignment" x="136" y="433">profile[id] = RTa</label>
+			<source ref="id65"/>
+			<target ref="id61"/>
+			<label kind="guard" x="1003" y="450">x &gt;= qca_latency</label>
+			<label kind="synchronisation" x="1003" y="467">UE_process[id]!</label>
 		</transition>
 		<transition>
-			<source ref="id59"/>
-			<target ref="id52"/>
-			<label kind="synchronisation" x="493" y="161">UCCH[bs][id]!</label>
-			<label kind="probability" x="493" y="144">prob_success</label>
+			<source ref="id71"/>
+			<target ref="id62"/>
+			<label kind="synchronisation" x="816" y="297">UCCH[bs][id]!</label>
+			<label kind="probability" x="816" y="280">prob_success</label>
+			<nail x="969" y="297"/>
+			<nail x="790" y="297"/>
 		</transition>
 		<transition>
-			<source ref="id54"/>
+			<source ref="id64"/>
+			<target ref="id71"/>
+			<label kind="guard" x="1003" y="255">x &gt;= slot_size[bs][id]/2</label>
+			<label kind="assignment" x="1003" y="272">x = 0</label>
+		</transition>
+		<transition>
+			<source ref="id63"/>
 			<target ref="id59"/>
-			<label kind="guard" x="510" y="93">x &gt;= slot_size[bs][id]/2</label>
-			<label kind="assignment" x="510" y="110">x = 0</label>
+			<label kind="assignment" x="408" y="306">x = 0</label>
 		</transition>
 		<transition>
-			<source ref="id53"/>
-			<target ref="id49"/>
-			<label kind="assignment" x="17" y="501">x = 0</label>
-			<nail x="510" y="475"/>
-			<nail x="510" y="526"/>
-			<nail x="7" y="526"/>
-		</transition>
-		<transition>
-			<source ref="id49"/>
-			<target ref="id48"/>
-			<label kind="synchronisation" x="34" y="306">connected[id]?</label>
-			<label kind="assignment" x="34" y="323">x = 0,
+			<source ref="id59"/>
+			<target ref="id62"/>
+			<label kind="synchronisation" x="739" y="93">joined[id]?</label>
+			<label kind="assignment" x="739" y="110">x = 0,
+z = 0,
 bs = getBS(id),
-channel = broadcast_channel[bs]</label>
+ch = channel[bs][retransmission[bs]]</label>
 		</transition>
 		<transition>
-			<source ref="id51"/>
-			<target ref="id54"/>
-			<label kind="guard" x="731" y="93">x &gt;= slot_start[bs][id]</label>
-			<label kind="assignment" x="731" y="110">x = 0</label>
+			<source ref="id61"/>
+			<target ref="id64"/>
+			<label kind="guard" x="1003" y="365">x &gt;= slot_start[bs][id]</label>
+			<label kind="assignment" x="1003" y="382">x = 0</label>
 		</transition>
 		<transition>
-			<source ref="id52"/>
-			<target ref="id50"/>
-			<label kind="synchronisation" x="637" y="212">BCH[channel]?</label>
-			<label kind="assignment" x="637" y="238">x = 0</label>
+			<source ref="id62"/>
+			<target ref="id69"/>
+			<label kind="synchronisation" x="663" y="255">BCH[ch]?</label>
 		</transition>
 		<transition>
-			<source ref="id52"/>
-			<target ref="id58"/>
-			<label kind="guard" x="493" y="306">x &gt;= disconnect_timeout</label>
+			<source ref="id62"/>
+			<target ref="id66"/>
+			<label kind="guard" x="408" y="221">z &gt;= disconnect_timeout</label>
 		</transition>
 		<transition>
-			<source ref="id50"/>
-			<target ref="id57"/>
-			<label kind="guard" x="918" y="195">!retransmission[bs]</label>
-			<label kind="assignment" x="918" y="212">channel = broadcast_channel[bs]</label>
+			<source ref="id60"/>
+			<target ref="id65"/>
+			<label kind="guard" x="756" y="442">!retransmission[bs] &amp;&amp;
+!ACK[id]</label>
+			<label kind="assignment" x="756" y="476">ch = channel[bs][retransmission[bs]]</label>
+			<nail x="756" y="501"/>
+		</transition>
+		<transition>
+			<source ref="id60"/>
+			<target ref="id68"/>
+			<label kind="guard" x="544" y="502">!dedicatedSlot(bs, id)</label>
+			<label kind="assignment" x="544" y="519">sleep_time = getSleepTime(id)</label>
+			<nail x="731" y="502"/>
 		</transition>
 	</template>
 	<template>
@@ -1622,136 +1873,197 @@ int getOffset()
     }
     return 0;
 }</declaration>
-		<location id="id60" x="-15130" y="-15266" color="#ffffff">
-			<name x="-15147" y="-15317">INIT</name>
-			<label kind="invariant" x="-15147" y="-15300">offset' == 1</label>
+		<location id="id72" x="-15130" y="-15266" color="#ffffff">
+			<name x="-15172" y="-15283">INIT</name>
+			<label kind="invariant" x="-15223" y="-15266">offset' == 1</label>
 			<urgent/>
 		</location>
-		<location id="id61" x="-15130" y="-14882">
-			<name x="-15240" y="-14883">LISTEN_ONLY</name>
+		<location id="id73" x="-15130" y="-14705">
+			<name x="-15240" y="-14706">LISTEN_ONLY</name>
 		</location>
-		<location id="id62" x="-14832" y="-14882">
-			<name x="-14815" y="-14891">STREAMING</name>
+		<location id="id74" x="-14832" y="-14705">
+			<name x="-14815" y="-14723">STREAMING</name>
 		</location>
-		<location id="id63" x="-14985" y="-14968" color="#4e342e">
-			<name x="-15011" y="-15002">FAILED</name>
+		<location id="id75" x="-14994" y="-14705" color="#4e342e">
+			<name x="-15019" y="-14696">FAILED</name>
 			<urgent/>
 		</location>
-		<location id="id64" x="-14832" y="-15266" color="#4e342e">
-			<name x="-14815" y="-15275">DISCONNECTED</name>
+		<location id="id76" x="-14832" y="-15266" color="#4e342e">
+			<name x="-14815" y="-15283">DISCONNECTED</name>
 			<urgent/>
 		</location>
-		<location id="id65" x="-15130" y="-15096">
-			<name x="-15249" y="-15113">CONNECTING</name>
+		<location id="id77" x="-15130" y="-15096">
+			<name x="-15240" y="-15113">CONNECTING</name>
 			<label kind="invariant" x="-15223" y="-15096">offset' == 0</label>
 		</location>
-		<location id="id66" x="-15130" y="-15181">
-			<name x="-15172" y="-15190">ON</name>
-			<label kind="invariant" x="-15113" y="-15190">offset &lt;= start_offset</label>
+		<location id="id78" x="-15130" y="-15181">
+			<name x="-15113" y="-15198">ON</name>
+			<label kind="invariant" x="-15113" y="-15181">offset &lt;= start_offset</label>
 		</location>
-		<location id="id67" x="-15130" y="-15019">
-			<name x="-15198" y="-15036">JOINED</name>
+		<location id="id79" x="-15130" y="-14858">
+			<name x="-15198" y="-14875">JOINED</name>
 		</location>
-		<init ref="id60"/>
+		<location id="id80" x="-14994" y="-14858" color="#ca6f1e">
+			<name x="-14985" y="-14841">SLEEPING</name>
+		</location>
+		<location id="id81" x="-15130" y="-14994">
+			<urgent/>
+		</location>
+		<init ref="id72"/>
 		<transition>
-			<source ref="id67"/>
-			<target ref="id62"/>
-			<label kind="synchronisation" x="-14934" y="-15045">stream[id]?</label>
-			<label kind="assignment" x="-14934" y="-15019">mode = 2</label>
-			<nail x="-14866" y="-15019"/>
+			<source ref="id81"/>
+			<target ref="id73"/>
+			<label kind="guard" x="-15240" y="-15036">static_profile[id]
+== Listen_Only</label>
+			<label kind="synchronisation" x="-15223" y="-14994">listen[id]!</label>
+			<label kind="assignment" x="-15223" y="-14977">mode = 1</label>
+			<nail x="-15232" y="-14994"/>
+			<nail x="-15232" y="-14747"/>
 		</transition>
 		<transition>
-			<source ref="id67"/>
-			<target ref="id64"/>
-			<label kind="synchronisation" x="-14977" y="-15079">disconnected[id]?</label>
-			<nail x="-15104" y="-15053"/>
-			<nail x="-14866" y="-15053"/>
+			<source ref="id81"/>
+			<target ref="id79"/>
+			<label kind="guard" x="-15121" y="-14968">static_profile[id] == initial</label>
+			<label kind="synchronisation" x="-15121" y="-14951">joined[id]!</label>
+			<label kind="assignment" x="-15121" y="-14934">mode = 0</label>
 		</transition>
 		<transition>
-			<source ref="id67"/>
-			<target ref="id61"/>
-			<label kind="synchronisation" x="-15198" y="-14968">listen[id]?</label>
-			<label kind="assignment" x="-15198" y="-14951">mode = 1</label>
+			<source ref="id79"/>
+			<target ref="id80"/>
+			<label kind="synchronisation" x="-15095" y="-14909">sleep[id]?</label>
+			<nail x="-15113" y="-14892"/>
+			<nail x="-15011" y="-14892"/>
 		</transition>
 		<transition>
-			<source ref="id66"/>
-			<target ref="id65"/>
-			<label kind="guard" x="-15121" y="-15155">offset &gt;= start_offset</label>
-			<label kind="synchronisation" x="-15121" y="-15138">started[id]!</label>
+			<source ref="id80"/>
+			<target ref="id79"/>
+			<label kind="guard" x="-15104" y="-14875">mode == 0</label>
+			<label kind="synchronisation" x="-15104" y="-14858">wake_up[id]?</label>
 		</transition>
 		<transition>
-			<source ref="id65"/>
-			<target ref="id64"/>
-			<label kind="synchronisation" x="-14985" y="-15121">disconnected[id]?</label>
-			<nail x="-14875" y="-15096"/>
+			<source ref="id80"/>
+			<target ref="id74"/>
+			<label kind="guard" x="-14960" y="-14875">mode == 2</label>
+			<label kind="synchronisation" x="-14968" y="-14858">wake_up[id]?</label>
+			<nail x="-14875" y="-14858"/>
 		</transition>
 		<transition>
-			<source ref="id65"/>
-			<target ref="id67"/>
-			<label kind="synchronisation" x="-15232" y="-15070">connected[id]?</label>
+			<source ref="id80"/>
+			<target ref="id73"/>
+			<label kind="guard" x="-15070" y="-14807">mode == 1</label>
+			<label kind="synchronisation" x="-15079" y="-14790">wake_up[id]?</label>
+			<nail x="-14994" y="-14790"/>
+			<nail x="-15113" y="-14790"/>
 		</transition>
 		<transition>
-			<source ref="id63"/>
-			<target ref="id61"/>
-			<label kind="guard" x="-15096" y="-14934">mode == 1</label>
-			<nail x="-15028" y="-14917"/>
-			<nail x="-15104" y="-14917"/>
+			<source ref="id73"/>
+			<target ref="id80"/>
+			<label kind="synchronisation" x="-15130" y="-14832">sleep[id]?</label>
+			<nail x="-15130" y="-14815"/>
+			<nail x="-15011" y="-14815"/>
 		</transition>
 		<transition>
-			<source ref="id61"/>
-			<target ref="id64"/>
-			<label kind="synchronisation" x="-15266" y="-15342">disconnected[id]?</label>
-			<nail x="-15266" y="-14883"/>
-			<nail x="-15266" y="-15316"/>
-			<nail x="-14832" y="-15316"/>
+			<source ref="id74"/>
+			<target ref="id80"/>
+			<label kind="synchronisation" x="-14950" y="-14909">sleep[id]?</label>
+			<nail x="-14875" y="-14892"/>
+			<nail x="-14968" y="-14892"/>
 		</transition>
 		<transition>
-			<source ref="id64"/>
-			<target ref="id60"/>
+			<source ref="id81"/>
+			<target ref="id74"/>
+			<label kind="guard" x="-15104" y="-15036">static_profile[id] == RTa ||
+static_profile[id] == HqRTa</label>
+			<label kind="synchronisation" x="-14926" y="-15019">stream[id]!</label>
+			<label kind="assignment" x="-14926" y="-14994">mode = 2</label>
+			<nail x="-14858" y="-14994"/>
 		</transition>
 		<transition>
-			<source ref="id62"/>
-			<target ref="id64"/>
-			<label kind="synchronisation" x="-14824" y="-15079">disconnected[id]?</label>
+			<source ref="id79"/>
+			<target ref="id76"/>
+			<label kind="synchronisation" x="-15283" y="-15351">disconnected[id]?</label>
+			<nail x="-15283" y="-14858"/>
+			<nail x="-15283" y="-15325"/>
+			<nail x="-14832" y="-15325"/>
 		</transition>
 		<transition>
-			<source ref="id63"/>
-			<target ref="id62"/>
-			<label kind="guard" x="-14943" y="-14934">mode == 2</label>
-			<nail x="-14951" y="-14917"/>
-			<nail x="-14866" y="-14917"/>
+			<source ref="id78"/>
+			<target ref="id77"/>
+			<label kind="guard" x="-15266" y="-15155">offset &gt;= start_offset</label>
+			<label kind="synchronisation" x="-15206" y="-15138">started[id]!</label>
 		</transition>
 		<transition>
-			<source ref="id61"/>
-			<target ref="id63"/>
-			<label kind="synchronisation" x="-15087" y="-14985">failed[id]?</label>
-			<nail x="-15104" y="-14968"/>
+			<source ref="id77"/>
+			<target ref="id76"/>
+			<label kind="synchronisation" x="-14994" y="-15121">disconnected[id]?</label>
+			<nail x="-14883" y="-15096"/>
 		</transition>
 		<transition>
-			<source ref="id62"/>
-			<target ref="id63"/>
-			<label kind="synchronisation" x="-14926" y="-14985">failed[id]?</label>
-			<nail x="-14858" y="-14968"/>
+			<source ref="id77"/>
+			<target ref="id81"/>
+			<label kind="synchronisation" x="-15121" y="-15070">connected[id]?</label>
 		</transition>
 		<transition>
-			<source ref="id62"/>
-			<target ref="id61"/>
-			<label kind="synchronisation" x="-15036" y="-14849">stop_sample[id]?</label>
-			<nail x="-14832" y="-14832"/>
-			<nail x="-15130" y="-14832"/>
+			<source ref="id75"/>
+			<target ref="id73"/>
+			<label kind="guard" x="-15096" y="-14722">mode == 1</label>
 		</transition>
 		<transition>
-			<source ref="id61"/>
-			<target ref="id62"/>
-			<label kind="synchronisation" x="-15028" y="-14900">stream[id]?</label>
-			<label kind="assignment" x="-15028" y="-14883">mode = 2</label>
+			<source ref="id73"/>
+			<target ref="id76"/>
+			<label kind="synchronisation" x="-15266" y="-15325">disconnected[id]?</label>
+			<nail x="-15266" y="-14706"/>
+			<nail x="-15266" y="-15299"/>
+			<nail x="-14832" y="-15299"/>
 		</transition>
 		<transition>
-			<source ref="id60"/>
-			<target ref="id66"/>
+			<source ref="id76"/>
+			<target ref="id72"/>
+		</transition>
+		<transition>
+			<source ref="id74"/>
+			<target ref="id76"/>
+			<label kind="synchronisation" x="-14824" y="-14934">disconnected[id]?</label>
+		</transition>
+		<transition>
+			<source ref="id75"/>
+			<target ref="id74"/>
+			<label kind="guard" x="-14943" y="-14722">mode == 2</label>
+		</transition>
+		<transition>
+			<source ref="id73"/>
+			<target ref="id75"/>
+			<label kind="synchronisation" x="-15087" y="-14756">failed[id]?</label>
+			<nail x="-15096" y="-14739"/>
+			<nail x="-15019" y="-14739"/>
+		</transition>
+		<transition>
+			<source ref="id74"/>
+			<target ref="id75"/>
+			<label kind="synchronisation" x="-14943" y="-14756">failed[id]?</label>
+			<nail x="-14866" y="-14739"/>
+			<nail x="-14960" y="-14739"/>
+		</transition>
+		<transition>
+			<source ref="id74"/>
+			<target ref="id73"/>
+			<label kind="synchronisation" x="-15045" y="-14603">stop_sample[id]?</label>
+			<nail x="-14832" y="-14603"/>
+			<nail x="-15130" y="-14603"/>
+		</transition>
+		<transition>
+			<source ref="id73"/>
+			<target ref="id74"/>
+			<label kind="synchronisation" x="-15019" y="-14654">stream[id]?</label>
+			<label kind="assignment" x="-15019" y="-14637">mode = 2</label>
+			<nail x="-15113" y="-14637"/>
+			<nail x="-14849" y="-14637"/>
+		</transition>
+		<transition>
+			<source ref="id72"/>
+			<target ref="id78"/>
 			<label kind="assignment" x="-15121" y="-15257">offset = 0,
-start_offset = getOffset(),
-mode = 0</label>
+start_offset = getOffset()</label>
 		</transition>
 	</template>
 	<template>
@@ -1772,17 +2084,20 @@ const int codec_latency = 1/(44000 * 1000000);    // 44kHz packet rate
 // --------------------------------------------------------------------------------------------
 
 clock x;    // DMA delay timer
-clock y;    // general usage timer
 clock z;    // disconnect timer
 
 BSid_t bs;    // BS that this UE is connected to
-int channel;    // BS DL channel
+int ch;    // BS DL channel
 
 int uart_latency = 0;
 
 bool transmitted;
 
 int prob_success;
+
+int24_t sleep_time;
+
+int disconnect_counter = 0;
 
 // packet preparation time: QCA + DMA latencies
 // can use samples prepared from last successful transmission to (slot start time - preparation time)
@@ -1812,223 +2127,327 @@ int getUARTTime()
 // --------------------------------------------------------------------------------------------
 // TODO
 // --------------------------------------------------------------------------------------------</declaration>
-		<location id="id68" x="-1139" y="-1020" color="#ffffff">
+		<location id="id82" x="-1139" y="-1020" color="#ffffff">
 			<name x="-1164" y="-1105">INITIAL</name>
 			<label kind="invariant" x="-1164" y="-1088">x' == 0 &amp;&amp;
-y' == 0 &amp;&amp;
 z' == 0</label>
 		</location>
-		<location id="id69" x="-1300" y="-799" color="#4e342e">
-			<name x="-1368" y="-808">FAILED</name>
+		<location id="id83" x="-1300" y="-918" color="#4e342e">
+			<name x="-1368" y="-927">FAILED</name>
 			<urgent/>
 		</location>
-		<location id="id70" x="-1299" y="-1020" color="#4e342e">
-			<name x="-1342" y="-1054">DISCONNECT</name>
+		<location id="id84" x="-1283" y="-1020" color="#4e342e">
+			<name x="-1326" y="-1054">DISCONNECT</name>
 			<urgent/>
 		</location>
-		<location id="id71" x="-807" y="-994" color="#ff00ff">
-			<name x="-884" y="-1028">PREPARE</name>
+		<location id="id85" x="-544" y="-561" color="#ff00ff">
+			<name x="-528" y="-578">PREPARE</name>
 			<urgent/>
 		</location>
-		<location id="id72" x="-595" y="-952" color="#ffa500">
-			<name x="-646" y="-986">WAIT_SAMPLES</name>
+		<location id="id86" x="-850" y="-561" color="#ffa500">
+			<name x="-901" y="-595">WAIT_SAMPLES</name>
 		</location>
-		<location id="id73" x="-773" y="-654" color="#6c3483">
-			<name x="-833" y="-722">TRANSMIT</name>
-			<label kind="invariant" x="-833" y="-705">x' == 1 &amp;&amp;
-x &lt;= slot_size[bs][id]/2</label>
+		<location id="id87" x="-1317" y="-544" color="#6c3483">
+			<name x="-1411" y="-561">TRANSMIT</name>
+			<label kind="invariant" x="-1479" y="-561">z' == 1 &amp;&amp;
+z &lt;= slot_size[bs][id]/2</label>
 		</location>
-		<location id="id74" x="-807" y="-799" color="#138d75">
-			<name x="-884" y="-841">BCH_ACK</name>
-			<label kind="invariant" x="-858" y="-824">y' == 0</label>
+		<location id="id88" x="-798" y="-705" color="#138d75">
+			<name x="-875" y="-747">BCH_ACK</name>
+			<label kind="invariant" x="-858" y="-730">z' == 1</label>
 			<urgent/>
 		</location>
-		<location id="id75" x="-399" y="-799">
-			<name x="-382" y="-816">PROCESS_QCA</name>
-			<label kind="invariant" x="-382" y="-799">x &lt;= qca_latency</label>
+		<location id="id89" x="-986" y="-442">
+			<name x="-1105" y="-442">PROCESS_QCA</name>
+			<label kind="invariant" x="-1096" y="-425">z &lt;= qca_latency</label>
 		</location>
-		<location id="id76" x="-1300" y="-935" color="#3498db">
-			<name x="-1393" y="-952">BCH_NACK</name>
-			<label kind="invariant" x="-1393" y="-935">y' == 1</label>
+		<location id="id90" x="-1300" y="-799" color="#3498db">
+			<name x="-1393" y="-816">BCH_NACK</name>
 			<urgent/>
 		</location>
-		<location id="id77" x="-510" y="-799" color="#ffff00">
-			<name x="-552" y="-833">RETRANSMIT</name>
+		<location id="id91" x="-739" y="-442" color="#ffff00">
+			<name x="-722" y="-459">RETRANSMIT</name>
 			<urgent/>
 		</location>
-		<location id="id78" x="-399" y="-654" color="#ffa500">
-			<name x="-382" y="-671">WAIT_SLOT</name>
-			<label kind="invariant" x="-382" y="-654">x' == 0 &amp;&amp;
+		<location id="id92" x="-1317" y="-442" color="#ffa500">
+			<name x="-1411" y="-451">WAIT_SLOT</name>
+			<label kind="invariant" x="-1530" y="-451">z' == 0 &amp;&amp;
 frame_clk[bs] &lt;= slot_start[bs][id]</label>
 		</location>
-		<location id="id79" x="-986" y="-1020">
+		<location id="id93" x="-986" y="-1020">
 			<urgent/>
 		</location>
-		<location id="id80" x="-986" y="-799" color="#ffa500">
-			<name x="-1122" y="-858">WAIT_BCH</name>
-			<label kind="invariant" x="-1122" y="-841">x' == 1 &amp;&amp;
+		<location id="id94" x="-986" y="-799" color="#ffa500">
+			<name x="-1122" y="-833">WAIT_BCH</name>
+			<label kind="invariant" x="-1122" y="-816">x' == 1 &amp;&amp;
 x &lt;= getLatency(id)</label>
 		</location>
-		<location id="id81" x="-1147" y="-654">
+		<location id="id95" x="-1215" y="-612">
 			<urgent/>
 		</location>
-		<location id="id82" x="-807" y="-892">
-			<name x="-892" y="-918">PROCESS</name>
-			<label kind="invariant" x="-935" y="-901">x &lt;= qca_latency</label>
+		<location id="id96" x="-544" y="-705">
+			<name x="-526" y="-723">PROCESS</name>
+			<label kind="invariant" x="-526" y="-706">z &lt;= qca_latency</label>
 		</location>
-		<location id="id83" x="-442" y="-739">
+		<location id="id97" x="-986" y="-561">
 			<urgent/>
 		</location>
-		<branchpoint id="id84" x="-986" y="-654">
+		<location id="id98" x="-799" y="-935" color="#ca6f1e">
+			<name x="-816" y="-986">SLEEP</name>
+			<label kind="invariant" x="-824" y="-969">z &lt;= sleep_time</label>
+		</location>
+		<location id="id99" x="-552" y="-849">
+			<label kind="invariant" x="-535" y="-858">z &lt;= sleep_latency</label>
+		</location>
+		<location id="id100" x="-552" y="-935">
+			<label kind="invariant" x="-603" y="-969">z &lt; frame_size[bs]/2</label>
+		</location>
+		<location id="id101" x="-799" y="-858">
+			<urgent/>
+		</location>
+		<location id="id102" x="-986" y="-748">
+			<urgent/>
+		</location>
+		<branchpoint id="id103" x="-986" y="-705">
 		</branchpoint>
-		<init ref="id68"/>
+		<branchpoint id="id104" x="-1147" y="-544">
+		</branchpoint>
+		<init ref="id82"/>
 		<transition>
-			<source ref="id84"/>
-			<target ref="id81"/>
-			<label kind="probability" x="-1130" y="-680">100 - prob_success</label>
+			<source ref="id90"/>
+			<target ref="id94"/>
+			<label kind="guard" x="-1241" y="-756">x &lt; getLatency(id)</label>
+			<nail x="-1275" y="-756"/>
+			<nail x="-1045" y="-756"/>
 		</transition>
 		<transition>
-			<source ref="id83"/>
-			<target ref="id75"/>
-			<label kind="guard" x="-518" y="-892">frame_clk[bs] + qca_latency &lt; slot_start[bs][id]</label>
+			<source ref="id102"/>
+			<target ref="id103"/>
 		</transition>
 		<transition>
-			<source ref="id83"/>
-			<target ref="id80"/>
-			<label kind="guard" x="-739" y="-739">frame_clk[bs] + qca_latency &gt;= slot_start[bs][id]</label>
-			<nail x="-935" y="-739"/>
+			<source ref="id103"/>
+			<target ref="id88"/>
+			<label kind="probability" x="-952" y="-722">prob_success</label>
 		</transition>
 		<transition>
-			<source ref="id82"/>
-			<target ref="id71"/>
-			<label kind="guard" x="-918" y="-952">x &gt;= qca_latency</label>
-			<label kind="synchronisation" x="-909" y="-969">processing[id]!</label>
+			<source ref="id103"/>
+			<target ref="id90"/>
+			<label kind="probability" x="-1224" y="-722">100 - prob_success</label>
+			<nail x="-1300" y="-705"/>
 		</transition>
 		<transition>
-			<source ref="id81"/>
-			<target ref="id80"/>
-			<label kind="guard" x="-1275" y="-705">!retransmission[bs]</label>
-			<nail x="-1147" y="-714"/>
+			<source ref="id101"/>
+			<target ref="id94"/>
+			<label kind="guard" x="-935" y="-858">sleep_time &lt;= 0</label>
+			<nail x="-952" y="-858"/>
 		</transition>
 		<transition>
-			<source ref="id81"/>
-			<target ref="id69"/>
-			<label kind="guard" x="-1300" y="-654">retransmission[bs] &amp;&amp;
-!transmitted</label>
-			<nail x="-1300" y="-654"/>
+			<source ref="id101"/>
+			<target ref="id98"/>
+			<label kind="guard" x="-892" y="-892">sleep_time &gt; 0</label>
+			<label kind="synchronisation" x="-858" y="-909">sleep[id]!</label>
 		</transition>
 		<transition>
-			<source ref="id72"/>
+			<source ref="id99"/>
+			<target ref="id100"/>
+			<label kind="guard" x="-544" y="-901">z &gt;= sleep_latency</label>
+			<label kind="synchronisation" x="-544" y="-918">sleep[id]!</label>
+			<label kind="assignment" x="-544" y="-884">z = 0</label>
+		</transition>
+		<transition>
+			<source ref="id88"/>
+			<target ref="id99"/>
+			<label kind="guard" x="-544" y="-824">!retransmission[bs] &amp;&amp;
+ACK[id]</label>
+			<label kind="assignment" x="-544" y="-790">z = 0,
+disconnect_counter = 0</label>
+			<nail x="-773" y="-756"/>
+			<nail x="-552" y="-756"/>
+			<nail x="-552" y="-833"/>
+		</transition>
+		<transition>
+			<source ref="id88"/>
+			<target ref="id101"/>
+			<label kind="guard" x="-935" y="-833">!dedicatedSlot(bs, id)</label>
+			<label kind="assignment" x="-790" y="-816">disconnect_counter = 0,
+sleep_time = getSleepTime(id)</label>
+		</transition>
+		<transition>
+			<source ref="id98"/>
+			<target ref="id94"/>
+			<label kind="guard" x="-935" y="-960">z &gt;= sleep_time</label>
+			<label kind="synchronisation" x="-935" y="-935">wake_up[id]!</label>
+			<nail x="-943" y="-935"/>
+		</transition>
+		<transition>
+			<source ref="id100"/>
+			<target ref="id98"/>
+			<label kind="synchronisation" x="-765" y="-935">frame_start[bs]?</label>
+			<label kind="assignment" x="-765" y="-918">z = 0,
+sleep_time = getSleepTime(id)</label>
+		</transition>
+		<transition>
+			<source ref="id104"/>
+			<target ref="id95"/>
+			<label kind="probability" x="-1343" y="-595">100 - prob_success</label>
+			<nail x="-1215" y="-561"/>
+		</transition>
+		<transition>
+			<source ref="id97"/>
+			<target ref="id89"/>
+			<label kind="guard" x="-977" y="-510">frame_clk[bs] + qca_latency &lt;
+slot_start[bs][id]</label>
+		</transition>
+		<transition>
+			<source ref="id97"/>
+			<target ref="id94"/>
+			<label kind="guard" x="-1011" y="-629">frame_clk[bs] + qca_latency &gt;=
+slot_start[bs][id]</label>
+			<nail x="-1020" y="-570"/>
+			<nail x="-1020" y="-765"/>
+		</transition>
+		<transition>
+			<source ref="id96"/>
+			<target ref="id85"/>
+			<label kind="guard" x="-535" y="-629">z &gt;= qca_latency</label>
+			<label kind="synchronisation" x="-535" y="-612">UE_process[id]!</label>
+		</transition>
+		<transition>
+			<source ref="id95"/>
+			<target ref="id94"/>
+			<label kind="guard" x="-1198" y="-637">!retransmission[bs]</label>
+			<nail x="-1071" y="-612"/>
+		</transition>
+		<transition>
+			<source ref="id95"/>
 			<target ref="id83"/>
-			<label kind="synchronisation" x="-569" y="-952">sample_ready[id]?</label>
-			<label kind="assignment" x="-569" y="-935">x = 0</label>
-			<nail x="-442" y="-952"/>
+			<label kind="guard" x="-1470" y="-722">retransmission[bs] &amp;&amp;
+!transmitted</label>
+			<nail x="-1334" y="-612"/>
+			<nail x="-1334" y="-892"/>
 		</transition>
 		<transition>
-			<source ref="id71"/>
-			<target ref="id75"/>
-			<label kind="guard" x="-544" y="-1037">samples_ready[id] != 0</label>
-			<label kind="assignment" x="-433" y="-1020">x = 0</label>
-			<nail x="-399" y="-994"/>
+			<source ref="id86"/>
+			<target ref="id97"/>
+			<label kind="synchronisation" x="-969" y="-561">sample_ready[id]?</label>
+			<label kind="assignment" x="-969" y="-544">z = 0</label>
 		</transition>
 		<transition>
-			<source ref="id74"/>
-			<target ref="id82"/>
-			<label kind="guard" x="-799" y="-875">!retransmission[bs]</label>
-			<label kind="assignment" x="-799" y="-858">x = 0,
-channel = broadcast_channel[bs]</label>
+			<source ref="id85"/>
+			<target ref="id89"/>
+			<label kind="guard" x="-697" y="-408">samples_ready[id] != 0</label>
+			<label kind="assignment" x="-697" y="-391">z = 0</label>
+			<nail x="-545" y="-408"/>
+			<nail x="-986" y="-408"/>
 		</transition>
 		<transition>
-			<source ref="id80"/>
-			<target ref="id74"/>
-			<label kind="synchronisation" x="-969" y="-824">BCH[channel]?</label>
-			<label kind="assignment" x="-969" y="-799">transmitted = 0</label>
+			<source ref="id88"/>
+			<target ref="id96"/>
+			<label kind="guard" x="-782" y="-731">!retransmission[bs]</label>
+			<label kind="assignment" x="-663" y="-722">z = 0,
+ch = channel[bs][0]</label>
 		</transition>
 		<transition>
-			<source ref="id78"/>
-			<target ref="id73"/>
-			<label kind="guard" x="-748" y="-654">frame_clk[bs] &gt;= slot_start[bs][id]</label>
-			<label kind="assignment" x="-748" y="-637">x = 0</label>
+			<source ref="id94"/>
+			<target ref="id102"/>
+			<label kind="guard" x="-969" y="-799">x &lt;= getLatency(id)</label>
+			<label kind="synchronisation" x="-969" y="-782">BCH[ch]?</label>
 		</transition>
 		<transition>
-			<source ref="id79"/>
-			<target ref="id80"/>
+			<source ref="id92"/>
+			<target ref="id87"/>
+			<label kind="guard" x="-1521" y="-501">frame_clk[bs] &gt;= slot_start[bs][id]</label>
+			<label kind="assignment" x="-1360" y="-484">z = 0</label>
+		</transition>
+		<transition>
+			<source ref="id93"/>
+			<target ref="id94"/>
 			<label kind="synchronisation" x="-977" y="-994">sample[id]!</label>
 		</transition>
 		<transition>
-			<source ref="id84"/>
-			<target ref="id80"/>
-			<label kind="synchronisation" x="-977" y="-713">UTCH[bs][id]!</label>
-			<label kind="assignment" x="-977" y="-697">transmitted = 1</label>
-			<label kind="probability" x="-977" y="-730">prob_success</label>
+			<source ref="id104"/>
+			<target ref="id94"/>
+			<label kind="synchronisation" x="-1130" y="-544">UTCH[bs][id]!</label>
+			<label kind="assignment" x="-1130" y="-527">transmitted = 1,
+disconnect_counter = 0,
+x = 0</label>
+			<label kind="probability" x="-1139" y="-595">prob_success</label>
+			<nail x="-1037" y="-544"/>
 		</transition>
 		<transition>
-			<source ref="id77"/>
-			<target ref="id75"/>
-			<label kind="assignment" x="-493" y="-799">x = 0</label>
-			<nail x="-433" y="-799"/>
+			<source ref="id91"/>
+			<target ref="id89"/>
+			<label kind="assignment" x="-807" y="-442">z = 0</label>
 		</transition>
 		<transition>
-			<source ref="id76"/>
-			<target ref="id69"/>
-			<label kind="guard" x="-1462" y="-875">z &lt;= disconnect_timeout</label>
+			<source ref="id90"/>
+			<target ref="id83"/>
+			<label kind="guard" x="-1504" y="-884">disconnect_counter &lt;=
+disconnect_timeout/getLatency(id) &amp;&amp;
+x &gt;= getLatency(id)</label>
 		</transition>
 		<transition>
-			<source ref="id74"/>
-			<target ref="id77"/>
-			<label kind="guard" x="-790" y="-799">retransmission[bs]</label>
-			<label kind="assignment" x="-790" y="-782">channel = retransmission_channel[bs]</label>
+			<source ref="id88"/>
+			<target ref="id91"/>
+			<label kind="guard" x="-731" y="-620">retransmission[bs] &amp;&amp;
+!ACK[id]</label>
+			<label kind="assignment" x="-765" y="-586">ch = channel[bs][retransmission[bs]]</label>
+			<nail x="-790" y="-611"/>
+			<nail x="-739" y="-611"/>
 		</transition>
 		<transition>
-			<source ref="id73"/>
-			<target ref="id84"/>
-			<label kind="guard" x="-960" y="-654">x &gt;= slot_size[bs][id]/2</label>
-			<label kind="assignment" x="-960" y="-637">x = 0,
+			<source ref="id87"/>
+			<target ref="id104"/>
+			<label kind="guard" x="-1292" y="-544">z &gt;= slot_size[bs][id]/2</label>
+			<label kind="assignment" x="-1292" y="-527">z = 0,
 getProbability()</label>
 		</transition>
 		<transition>
-			<source ref="id75"/>
-			<target ref="id78"/>
-			<label kind="guard" x="-391" y="-739">x &gt;= qca_latency</label>
-			<label kind="assignment" x="-391" y="-722">x = 0</label>
+			<source ref="id89"/>
+			<target ref="id92"/>
+			<label kind="guard" x="-1232" y="-459">z &gt;= qca_latency</label>
+			<label kind="assignment" x="-1232" y="-442">z = 0</label>
 		</transition>
 		<transition>
-			<source ref="id71"/>
-			<target ref="id72"/>
-			<label kind="guard" x="-773" y="-952">samples_ready[id] == 0</label>
-			<nail x="-782" y="-952"/>
+			<source ref="id85"/>
+			<target ref="id86"/>
+			<label kind="guard" x="-705" y="-561">samples_ready[id] == 0</label>
 		</transition>
 		<transition>
-			<source ref="id70"/>
-			<target ref="id68"/>
-			<label kind="synchronisation" x="-1275" y="-1020">disconnected[id]!</label>
+			<source ref="id84"/>
+			<target ref="id82"/>
+			<label kind="synchronisation" x="-1266" y="-1045">disconnected[id]!</label>
+			<label kind="assignment" x="-1266" y="-1020">x = 0,
+z = 0</label>
 		</transition>
 		<transition>
-			<source ref="id76"/>
-			<target ref="id70"/>
-			<label kind="guard" x="-1461" y="-986">y &gt;= disconnect_timeout</label>
-			<label kind="assignment" x="-1342" y="-1003">y = 0</label>
+			<source ref="id90"/>
+			<target ref="id84"/>
+			<label kind="guard" x="-1487" y="-986">disconnect_counter &gt;
+disconnect_timeout/getLatency(id)</label>
+			<nail x="-1283" y="-841"/>
 		</transition>
 		<transition>
-			<source ref="id69"/>
-			<target ref="id80"/>
-			<label kind="synchronisation" x="-1266" y="-824">failed[id]!</label>
-			<label kind="assignment" x="-1266" y="-799">y = 0,
-samples_lost[id] = samples_ready[id]</label>
+			<source ref="id83"/>
+			<target ref="id94"/>
+			<label kind="synchronisation" x="-1275" y="-943">failed[id]!</label>
+			<label kind="assignment" x="-1266" y="-918">x = 0,
+samples_lost[id] += samples_ready[id],
+ch = channel[bs][!retransmission[bs]]</label>
+			<nail x="-1028" y="-918"/>
 		</transition>
 		<transition>
-			<source ref="id80"/>
-			<target ref="id76"/>
-			<label kind="guard" x="-1215" y="-960">x &gt;= getLatency(id)</label>
-			<label kind="assignment" x="-1215" y="-935">y = x</label>
-			<nail x="-1020" y="-935"/>
+			<source ref="id94"/>
+			<target ref="id90"/>
+			<label kind="guard" x="-1266" y="-816">x &gt; getLatency(id)</label>
+			<label kind="assignment" x="-1266" y="-799">disconnect_counter++</label>
 		</transition>
 		<transition>
-			<source ref="id68"/>
-			<target ref="id79"/>
+			<source ref="id82"/>
+			<target ref="id93"/>
 			<label kind="synchronisation" x="-1088" y="-1020">stream[id]?</label>
 			<label kind="assignment" x="-1088" y="-1071">bs = getBS(id),
-channel = retransmission_channel[bs]</label>
+ch = channel[bs][!retransmission[bs]]</label>
 		</transition>
 	</template>
 	<template>
@@ -2054,7 +2473,7 @@ int i = 0;    // channel scan counter
 int j = 0;    // re-try scan counter
 
 BSid_t bs;    // BS that this UE is connected to
-int channel;    // BS DL channel
+int ch;    // BS DL channel
 
 int prob_stable;
 int prob_success;
@@ -2073,18 +2492,18 @@ bool checkChannel(int ch_id)
 {
     for(k: BSid_t)
     {
-        if(broadcast_channel[k] == ch_id)
+        if(channel[k][0] == ch_id)
         {
             BS_assignment[id] = k;
             bs = k;
-            channel = ch_id;
+            ch = ch_id;
             return true;
         }
-        if(retransmission_channel[k] == ch_id)
+        if(channel[k][1] == ch_id)
         {
             BS_assignment[id] = k;
             bs = k;
-            channel = ch_id;
+            ch = ch_id;
             return true;
         }
     }
@@ -2097,92 +2516,93 @@ bool checkChannel(int ch_id)
 // --------------------------------------------------------------------------------------------
 
 </declaration>
-		<location id="id85" x="-3238" y="-3128" color="#ffffff">
-			<name x="-3255" y="-3162">INITIAL</name>
+		<location id="id105" x="-3238" y="-3128" color="#ffffff">
+			<name x="-3255" y="-3179">INITIAL</name>
+			<label kind="invariant" x="-3255" y="-3162">x' == 0</label>
 		</location>
-		<location id="id86" x="-3238" y="-2805">
+		<location id="id106" x="-3238" y="-2805">
 			<name x="-3221" y="-2822">TEST_CHANNEL</name>
 			<label kind="invariant" x="-3221" y="-2805">x &lt;= channel_stability_latency</label>
 		</location>
-		<location id="id87" x="-3238" y="-3000">
+		<location id="id107" x="-3238" y="-3000">
 			<urgent/>
 		</location>
-		<location id="id88" x="-2721" y="-3127">
-			<name x="-2755" y="-3160">CONNECTED</name>
+		<location id="id108" x="-2626" y="-3128">
+			<name x="-2660" y="-3161">CONNECTED</name>
 			<urgent/>
 		</location>
-		<location id="id89" x="-2957" y="-2678" color="#ffa500">
+		<location id="id109" x="-2957" y="-2678" color="#ffa500">
 			<name x="-3000" y="-2729">WAIT_BCH</name>
 			<label kind="invariant" x="-3034" y="-2712">x &lt;= disconnect_timeout</label>
 		</location>
-		<location id="id90" x="-2958" y="-2473" color="#6c3483">
+		<location id="id110" x="-2958" y="-2473" color="#6c3483">
 			<name x="-2992" y="-2448">TRANSMIT</name>
 			<label kind="invariant" x="-3026" y="-2431">x &lt;= RACH_size[bs]/2</label>
 		</location>
-		<location id="id91" x="-2720" y="-2677" color="#138d75">
-			<name x="-2704" y="-2693">BCH_ACK</name>
+		<location id="id111" x="-2625" y="-2678" color="#138d75">
+			<name x="-2609" y="-2694">BCH_ACK</name>
 			<urgent/>
 		</location>
-		<location id="id92" x="-2721" y="-2472" color="#00ffff">
-			<name x="-2705" y="-2489">UL_NACK</name>
-			<label kind="invariant" x="-2705" y="-2472">frame_clk[bs] &lt;= RACH_start[bs]</label>
+		<location id="id112" x="-2626" y="-2473" color="#00ffff">
+			<name x="-2610" y="-2490">UL_NACK</name>
+			<label kind="invariant" x="-2610" y="-2473">frame_clk[bs] &lt;= RACH_start[bs]</label>
 		</location>
-		<location id="id93" x="-3238" y="-2941">
+		<location id="id113" x="-3238" y="-2941">
 			<name x="-3289" y="-2932">SCAN</name>
 			<label kind="invariant" x="-3357" y="-2915">x &lt;= scan_timeout</label>
 		</location>
-		<location id="id94" x="-2721" y="-2906" color="#00ff00">
-			<name x="-2704" y="-2914">UL_ACK</name>
+		<location id="id114" x="-2626" y="-2907" color="#00ff00">
+			<name x="-2609" y="-2915">UL_ACK</name>
 			<urgent/>
 		</location>
-		<location id="id95" x="-2958" y="-3094" color="#4e342e">
+		<location id="id115" x="-2958" y="-3094" color="#4e342e">
 			<name x="-2941" y="-3102">DISCONNECT</name>
 			<urgent/>
 		</location>
-		<branchpoint id="id96" x="-2958" y="-2592">
+		<branchpoint id="id116" x="-2958" y="-2575">
 		</branchpoint>
-		<branchpoint id="id97" x="-3238" y="-2678">
+		<branchpoint id="id117" x="-3238" y="-2678">
 		</branchpoint>
-		<init ref="id85"/>
+		<init ref="id105"/>
 		<transition>
-			<source ref="id96"/>
-			<target ref="id89"/>
-			<label kind="probability" x="-3111" y="-2618">100 - prob_success</label>
-			<nail x="-3119" y="-2592"/>
+			<source ref="id116"/>
+			<target ref="id109"/>
+			<label kind="probability" x="-3111" y="-2601">100 - prob_success</label>
+			<nail x="-3119" y="-2575"/>
 			<nail x="-3119" y="-2618"/>
 		</transition>
 		<transition>
-			<source ref="id97"/>
-			<target ref="id93"/>
+			<source ref="id117"/>
+			<target ref="id113"/>
 			<label kind="probability" x="-3400" y="-2703">100 - prob_stable</label>
 			<nail x="-3451" y="-2677"/>
 			<nail x="-3451" y="-2856"/>
 		</transition>
 		<transition>
-			<source ref="id96"/>
-			<target ref="id89"/>
-			<label kind="synchronisation" x="-2949" y="-2635">RACH[bs]!</label>
-			<label kind="assignment" x="-2949" y="-2618">RACH_id[bs] = id</label>
-			<label kind="probability" x="-2949" y="-2652">prob_success</label>
+			<source ref="id116"/>
+			<target ref="id109"/>
+			<label kind="synchronisation" x="-2949" y="-2626">RACH[bs]!</label>
+			<label kind="assignment" x="-2949" y="-2609">RACH_id[bs] = id</label>
+			<label kind="probability" x="-2949" y="-2643">prob_success</label>
 		</transition>
 		<transition>
-			<source ref="id95"/>
-			<target ref="id85"/>
-			<label kind="synchronisation" x="-3136" y="-3111">disconnected[id]!</label>
+			<source ref="id115"/>
+			<target ref="id105"/>
+			<label kind="synchronisation" x="-3136" y="-3119">disconnected[id]!</label>
 			<nail x="-3204" y="-3094"/>
 		</transition>
 		<transition>
-			<source ref="id94"/>
-			<target ref="id88"/>
+			<source ref="id114"/>
+			<target ref="id108"/>
 		</transition>
 		<transition>
-			<source ref="id87"/>
-			<target ref="id93"/>
+			<source ref="id107"/>
+			<target ref="id113"/>
 			<label kind="assignment" x="-3230" y="-2983">x = 0</label>
 		</transition>
 		<transition>
-			<source ref="id90"/>
-			<target ref="id89"/>
+			<source ref="id110"/>
+			<target ref="id109"/>
 			<label kind="guard" x="-3128" y="-2533">x &gt;= RACH_size[bs] ||
 RACH_id[bs] != -1</label>
 			<label kind="assignment" x="-3128" y="-2499">x = 0</label>
@@ -2190,50 +2610,50 @@ RACH_id[bs] != -1</label>
 			<nail x="-3136" y="-2635"/>
 		</transition>
 		<transition>
-			<source ref="id92"/>
-			<target ref="id90"/>
-			<label kind="guard" x="-2941" y="-2499">frame_clk[bs] &gt;= RACH_start[bs]</label>
-			<label kind="assignment" x="-2856" y="-2473">x = 0</label>
+			<source ref="id112"/>
+			<target ref="id110"/>
+			<label kind="guard" x="-2898" y="-2490">frame_clk[bs] &gt;= RACH_start[bs]</label>
+			<label kind="assignment" x="-2898" y="-2473">x = 0</label>
 		</transition>
 		<transition>
-			<source ref="id89"/>
-			<target ref="id91"/>
-			<label kind="guard" x="-2932" y="-2678">x &lt;= disconnect_timeout</label>
-			<label kind="synchronisation" x="-2881" y="-2703">BCH[channel]?</label>
+			<source ref="id109"/>
+			<target ref="id111"/>
+			<label kind="guard" x="-2873" y="-2677">x &lt;= disconnect_timeout</label>
+			<label kind="synchronisation" x="-2873" y="-2703">BCH[channel[bs][retransmission[bs]]]?</label>
 			<nail x="-2949" y="-2678"/>
 		</transition>
 		<transition>
-			<source ref="id89"/>
-			<target ref="id95"/>
+			<source ref="id109"/>
+			<target ref="id115"/>
 			<label kind="guard" x="-2949" y="-2898">x &gt;= disconnect_timeout</label>
 		</transition>
 		<transition>
-			<source ref="id91"/>
-			<target ref="id94"/>
-			<label kind="guard" x="-2712" y="-2804">ACK[id] == 1</label>
+			<source ref="id111"/>
+			<target ref="id114"/>
+			<label kind="guard" x="-2617" y="-2805">ACK[id] == 1</label>
 		</transition>
 		<transition>
-			<source ref="id90"/>
-			<target ref="id96"/>
-			<label kind="guard" x="-2949" y="-2558">x &gt;= RACH_size[bs]/2 &amp;&amp;
+			<source ref="id110"/>
+			<target ref="id116"/>
+			<label kind="guard" x="-2949" y="-2567">x &gt;= RACH_size[bs]/2 &amp;&amp;
 RACH_id[bs] == -1</label>
-			<label kind="assignment" x="-2949" y="-2524">x = 0</label>
-			<nail x="-2958" y="-2575"/>
+			<label kind="assignment" x="-2949" y="-2533">x = 0</label>
 		</transition>
 		<transition>
-			<source ref="id91"/>
-			<target ref="id92"/>
-			<label kind="guard" x="-2712" y="-2566">ACK[id] == 0</label>
+			<source ref="id111"/>
+			<target ref="id112"/>
+			<label kind="guard" x="-2616" y="-2585">ACK[id] == 0</label>
 		</transition>
 		<transition>
-			<source ref="id88"/>
-			<target ref="id85"/>
-			<label kind="synchronisation" x="-3026" y="-3170">connected[id]!</label>
-			<label kind="assignment" x="-3026" y="-3153">profile[id] = static_profile[id]</label>
+			<source ref="id108"/>
+			<target ref="id105"/>
+			<label kind="synchronisation" x="-2822" y="-3153">connected[id]!</label>
+			<label kind="assignment" x="-2822" y="-3128">profile[id] = static_profile[id],
+x = 0</label>
 		</transition>
 		<transition>
-			<source ref="id93"/>
-			<target ref="id87"/>
+			<source ref="id113"/>
+			<target ref="id107"/>
 			<label kind="guard" x="-3451" y="-3000">x &gt;= scan_timeout &amp;&amp;
 i &gt;= number_channels &amp;&amp;
 j &lt; number_retries</label>
@@ -2243,8 +2663,8 @@ j++</label>
 			<nail x="-3459" y="-3000"/>
 		</transition>
 		<transition>
-			<source ref="id87"/>
-			<target ref="id85"/>
+			<source ref="id107"/>
+			<target ref="id105"/>
 			<label kind="guard" x="-3425" y="-3128">j &gt;= number_retries</label>
 			<label kind="synchronisation" x="-3408" y="-3111">disconnected[id]!</label>
 			<label kind="assignment" x="-3340" y="-3094">i = 0,
@@ -2253,8 +2673,8 @@ j = 0</label>
 			<nail x="-3298" y="-3128"/>
 		</transition>
 		<transition>
-			<source ref="id93"/>
-			<target ref="id87"/>
+			<source ref="id113"/>
+			<target ref="id107"/>
 			<label kind="guard" x="-3051" y="-2992">x &gt;= scan_timeout &amp;&amp;
 i &lt; number_channels</label>
 			<label kind="assignment" x="-3051" y="-2958">i++</label>
@@ -2262,30 +2682,30 @@ i &lt; number_channels</label>
 			<nail x="-3059" y="-3000"/>
 		</transition>
 		<transition>
-			<source ref="id93"/>
-			<target ref="id86"/>
+			<source ref="id113"/>
+			<target ref="id106"/>
 			<label kind="guard" x="-3230" y="-2915">i &lt; number_channels</label>
 			<label kind="synchronisation" x="-3230" y="-2898">BCH[i]?</label>
 			<label kind="assignment" x="-3230" y="-2881">x = 0,
 checkChannel(i)</label>
 		</transition>
 		<transition>
-			<source ref="id97"/>
-			<target ref="id89"/>
+			<source ref="id117"/>
+			<target ref="id109"/>
 			<label kind="assignment" x="-3187" y="-2677">i = 0,
 j = 0,
 x = 0</label>
 			<label kind="probability" x="-3187" y="-2703">prob_stable</label>
 		</transition>
 		<transition>
-			<source ref="id86"/>
-			<target ref="id97"/>
+			<source ref="id106"/>
+			<target ref="id117"/>
 			<label kind="guard" x="-3230" y="-2762">x &gt;= channel_stability_latency</label>
 			<label kind="assignment" x="-3230" y="-2745">getProbability()</label>
 		</transition>
 		<transition>
-			<source ref="id85"/>
-			<target ref="id87"/>
+			<source ref="id105"/>
+			<target ref="id107"/>
 			<label kind="synchronisation" x="-3230" y="-3085">started[id]?</label>
 			<label kind="assignment" x="-3230" y="-3068">i = 0,
 j = 0,
@@ -2308,7 +2728,6 @@ profile[id] = initial</label>
 // --------------------------------------------------------------------------------------------
 
 clock x;    // sampling timer
-clock y;    // single sample timer
 
 BSid_t bs;
 
@@ -2337,73 +2756,74 @@ int getNumberSamples()
     int time = getSampleTime();
     return fint(frame_size[bs]/time);
 }</declaration>
-		<location id="id98" x="-696" y="-654">
-			<name x="-799" y="-697">SAMPLE</name>
-			<label kind="invariant" x="-799" y="-680">x &lt;= frame_size[bs]</label>
+		<location id="id118" x="-764" y="-654">
+			<name x="-816" y="-722">SAMPLE</name>
+			<label kind="invariant" x="-816" y="-705">x' == 1 &amp;&amp;
+x &lt;= frame_size[bs]</label>
 		</location>
-		<location id="id99" x="-416" y="-654">
-			<name x="-459" y="-637">PROCESS_CODEC</name>
-			<label kind="invariant" x="-459" y="-620">x' == 1 &amp;&amp;
-x &lt;= codec_latency</label>
+		<location id="id119" x="-765" y="-544" color="#ff00ff">
+			<name x="-799" y="-527">PROCESS_CODEC</name>
+			<label kind="invariant" x="-799" y="-510">x &lt;= codec_latency</label>
 		</location>
-		<location id="id100" x="-952" y="-654" color="#ffffff">
-			<name x="-978" y="-688">INITIAL</name>
+		<location id="id120" x="-1105" y="-654" color="#ffffff">
+			<name x="-1130" y="-705">INITIAL</name>
+			<label kind="invariant" x="-1130" y="-688">x' == 0</label>
 		</location>
-		<location id="id101" x="-416" y="-756">
-			<name x="-458" y="-807">TRANSFER</name>
-			<label kind="invariant" x="-467" y="-790">x &lt;= uart_latency</label>
-			<label kind="comments" x="-459" y="-833">DSP to QCA TX</label>
+		<location id="id121" x="-340" y="-544">
+			<name x="-382" y="-527">TRANSFER</name>
+			<label kind="invariant" x="-382" y="-510">x &lt;= uart_latency</label>
+			<label kind="comments" x="-382" y="-484">DSP to QCA TX</label>
 		</location>
-		<location id="id102" x="-952" y="-586" color="#4e342e">
-			<name x="-1012" y="-595">STOP</name>
+		<location id="id122" x="-1105" y="-544" color="#4e342e">
+			<name x="-1165" y="-553">STOP</name>
 			<label kind="testcodeEnter">Add brown color</label>
 			<urgent/>
 		</location>
-		<init ref="id100"/>
+		<init ref="id120"/>
 		<transition>
-			<source ref="id98"/>
-			<target ref="id99"/>
-			<label kind="guard" x="-603" y="-680">x &gt;= frame_size[bs]</label>
-			<label kind="assignment" x="-603" y="-654">x = 0</label>
+			<source ref="id118"/>
+			<target ref="id119"/>
+			<label kind="guard" x="-756" y="-620">x &gt;= frame_size[bs]</label>
+			<label kind="assignment" x="-756" y="-603">x = 0</label>
 		</transition>
 		<transition>
-			<source ref="id98"/>
-			<target ref="id102"/>
-			<label kind="synchronisation" x="-816" y="-578">disconnected[id]?</label>
-			<nail x="-697" y="-552"/>
-			<nail x="-952" y="-552"/>
+			<source ref="id118"/>
+			<target ref="id122"/>
+			<label kind="synchronisation" x="-935" y="-569">disconnected[id]?</label>
+			<nail x="-824" y="-544"/>
 		</transition>
 		<transition>
-			<source ref="id98"/>
-			<target ref="id102"/>
-			<label kind="synchronisation" x="-833" y="-612">stop_sample[id]?</label>
-			<nail x="-722" y="-586"/>
+			<source ref="id118"/>
+			<target ref="id122"/>
+			<label kind="synchronisation" x="-935" y="-612">stop_sample[id]?</label>
+			<nail x="-833" y="-586"/>
+			<nail x="-1079" y="-586"/>
 		</transition>
 		<transition>
-			<source ref="id101"/>
-			<target ref="id98"/>
-			<label kind="guard" x="-688" y="-799">x &gt;= uart_latency</label>
-			<label kind="synchronisation" x="-688" y="-782">sample_ready[id]!</label>
-			<label kind="assignment" x="-688" y="-756">x = 0,
-samples_ready[id] = 1</label>
-			<nail x="-697" y="-756"/>
+			<source ref="id121"/>
+			<target ref="id118"/>
+			<label kind="guard" x="-612" y="-731">x &gt;= uart_latency</label>
+			<label kind="synchronisation" x="-612" y="-714">sample_ready[id]!</label>
+			<label kind="assignment" x="-612" y="-697">x = 0,
+samples_ready[id] = getNumberSamples()</label>
+			<nail x="-340" y="-654"/>
 		</transition>
 		<transition>
-			<source ref="id99"/>
-			<target ref="id101"/>
-			<label kind="guard" x="-408" y="-722">x &gt;= codec_latency</label>
-			<label kind="assignment" x="-408" y="-705">x = 0</label>
+			<source ref="id119"/>
+			<target ref="id121"/>
+			<label kind="guard" x="-569" y="-544">x &gt;= codec_latency</label>
+			<label kind="assignment" x="-569" y="-527">x = 0</label>
 		</transition>
 		<transition>
-			<source ref="id102"/>
-			<target ref="id100"/>
-			<label kind="assignment" x="-994" y="-629">x = 0</label>
+			<source ref="id122"/>
+			<target ref="id120"/>
+			<label kind="assignment" x="-1139" y="-612">x = 0</label>
 		</transition>
 		<transition>
-			<source ref="id100"/>
-			<target ref="id98"/>
-			<label kind="synchronisation" x="-910" y="-688">sample[id]?</label>
-			<label kind="assignment" x="-910" y="-671">x = 0,
+			<source ref="id120"/>
+			<target ref="id118"/>
+			<label kind="synchronisation" x="-1003" y="-714">sample[id]?</label>
+			<label kind="assignment" x="-1003" y="-697">x = 0,
 bs = getBS(id)</label>
 		</transition>
 	</template>
@@ -2425,12 +2845,12 @@ usr_2sm = UserSample(1, 48, 16);
 bs_1 = BaseStation(0);
 bs_1clk = FrameClock(0);
 bs_1s = Scheduler(0);
-bs_1ip = InternalProcessing(0, 6250);
+bs_1ip = InternalBSProcessing(0, 6250);
 
 bs_2 = BaseStation(1);
 bs_2clk = FrameClock(1);
 bs_2s = Scheduler(1);
-bs_2ip = InternalProcessing(1, 6250);
+bs_2ip = InternalUEProcessing(1, 6250);
 
 // List one or more processes to be composed into a system.
 system bs_1, bs_1clk, bs_1s, bs_1ip, bs_2, bs_2clk, bs_2s, bs_2ip, usr_1, usr_1s, usr_1c, usr_1j, usr_1lt, usr_1sm;
@@ -2458,6 +2878,10 @@ system bs_1, bs_1clk, bs_1s, bs_1ip, bs_2, bs_2clk, bs_2s, bs_2ip, usr_1, usr_1s
 		</query>
 		<query>
 			<formula>simulate [&lt;= 800000; 1] {bs_2s.RETRY, frame_clk[0]}</formula>
+			<comment></comment>
+		</query>
+		<query>
+			<formula>simulate [&lt;= 400000; 1] {usr_1.STREAMING}</formula>
 			<comment></comment>
 		</query>
 		<query>
