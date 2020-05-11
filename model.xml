@@ -91,7 +91,7 @@ const int MCS = 3;    // MCS index
 
 const int audio_quality = 48;    // kbits/s
 
-const profileId_t static_profile[UEid_t] = {0, 3, 3, 3, 3, 3, 3, 1, 1, 1};    // profiles of the UEs - can be negotiated with the BS
+const profileId_t static_profile[UEid_t] = {0, 0, 0, 0, 0, 3, 3, 1, 1, 1};    // profiles of the UEs - can be negotiated with the BS
 
 const int UL_audio_size = 41;    // UL slot audio size: audio (40B) + checksum (1B) (in Bytes)
 
@@ -290,7 +290,7 @@ Node_t getLast(Queue_t q)
 
 int insert(Node_t value, Queue_t &amp;q)    // add a node according to its priority
 {
-    int i = 0;
+    int i;
     bool found = false;
 
     if(!isFull(q)){
@@ -309,7 +309,7 @@ int insert(Node_t value, Queue_t &amp;q)    // add a node according to its prior
                     found = true;
                 }
             }
-            q.queue[i] = value;
+            q.queue[i+1] = value;
             q.size++;
         }
         return 0;
@@ -339,8 +339,8 @@ int enqueue(Node_t value, Queue_t &amp;q)    // add a node at the end of the que
         }
         else
         {
-            q.queue[q.rear + 1] = value;
-            q.rear++;
+            q.rear = (q.rear + 1) % number_UE;
+            q.queue[q.rear] = value;
             q.size++;
         }
         return 0;
@@ -380,7 +380,7 @@ int dequeue(Queue_t &amp;q)
     {
         Node_t value = getFirst(q);
         q.size--;
-        q.front++;
+        q.front = (q.front + 1) % number_UE;
         return value.id;
     }
 }
@@ -582,7 +582,6 @@ void addUE(BSid_t bs, UEid_t id)
         new_node.prior = static_profile[id];
         insert(new_node, priority_queue[bs]);
     }
-    RACH_id[bs] = -1;
 }
 
 // --------------------------------------------------------------------------------------------
@@ -690,7 +689,8 @@ int uart_latency;
 
 int getAESTime()
 {
-    return getULAudioData(id)/(AES_bit_clock/1000);
+    int bs = getBS(id);
+    return getULAudioData(bs)/(AES_bit_clock/1000);
 }
 
 int getDataType()
@@ -704,7 +704,9 @@ int getDataType()
 
 int getUARTTime()
 {
-    return getULAudioData(id)/(uart_speed/1000);
+    
+    int bs = getBS(id);
+    return getULAudioData(bs)/(uart_speed/1000);
 }
 
 // --------------------------------------------------------------------------------------------
@@ -946,7 +948,7 @@ int uart_latency;
 
 int getAESTime()
 {
-    return getULAudioData(owner[bs][current_slot[bs]])/(AES_bit_clock/1000);
+    return getULAudioData(bs)/(AES_bit_clock/1000);
 }
 
 int getDataType()
@@ -959,7 +961,7 @@ int getDataType()
 
 int getUARTTime()
 {
-    return getULAudioData(owner[bs][current_slot[bs]])/(uart_speed/1000);
+    return getULAudioData(bs)/(uart_speed/1000);
 }
 
 // --------------------------------------------------------------------------------------------
@@ -1118,6 +1120,15 @@ void processQueue(Queue_t queue, bool audio)
     	        slot_size[bs][ue.id] = duration;
 	            slot_start[bs][ue.id] = start_time;
 	            start_time += slot_size[bs][ue.id];
+
+                owner[bs][j++] = number_UE;
+                slot_size[bs][number_UE] = ACK_duration;
+                // slot_data[bs][number_UE] = getACKData();
+                slot_start[bs][number_UE] = start_time;
+                start_time += slot_size[bs][ue.id];
+                start_time = start_time + slot_size[bs][number_UE];
+                slot_count += 1;
+                number_slots[bs] = slot_count;
             }
             else
             {
@@ -1199,14 +1210,16 @@ void scheduleFrame()
     number_slots[bs] = slot_count - 1;
 
     // ACK BCH
-    if(slot_count &gt; 3) {
-        owner[bs][j++] = number_UE;
-        slot_size[bs][number_UE] = ACK_duration;
+    //if(slot_count &gt; 3) {
+    //    owner[bs][j++] = number_UE;
+    //    slot_size[bs][number_UE] = ACK_duration;
         // slot_data[bs][number_UE] = getACKData();
-        slot_start[bs][number_UE] = start_time;
-        start_time = start_time + slot_size[bs][number_UE];
-        number_slots[bs] = slot_count;
-    }
+     //   slot_start[bs][number_UE] = start_time;
+     //   start_time = start_time + slot_size[bs][number_UE];
+    //    number_slots[bs] = slot_count;
+   //     number_slots[bs] = slot_count;
+    //}
+   
 
     for(i = 1; i &lt; number_slots[bs] + 2; i++)
     {
@@ -1530,7 +1543,8 @@ frame_clk[bs] &gt;= slot_start[bs][ue]</label>
 slot &lt; number_slots[bs]</label>
 			<label kind="assignment" x="-876" y="-697">current_slot[bs] = slot,
 ue = owner[bs][slot],
-GI = GI_size[bs]</label>
+GI = GI_size[bs],
+RACH_id[bs] = -1</label>
 		</transition>
 		<transition>
 			<source ref="id38"/>
@@ -2032,10 +2046,19 @@ x &lt;= channel_switch</label>
 		</branchpoint>
 		<init ref="id74"/>
 		<transition>
+			<source ref="id90"/>
+			<target ref="id81"/>
+			<label kind="guard" x="51" y="212">z &gt;= disconnect_timeout</label>
+			<nail x="102" y="357"/>
+			<nail x="102" y="238"/>
+			<nail x="204" y="238"/>
+		</transition>
+		<transition>
 			<source ref="id75"/>
 			<target ref="id84"/>
-			<label kind="guard" x="459" y="374">ACK[id]</label>
-			<label kind="synchronisation" x="459" y="391">sleep[id]!</label>
+			<label kind="guard" x="467" y="348">ACK[id]</label>
+			<label kind="synchronisation" x="467" y="365">sleep[id]!</label>
+			<label kind="assignment" x="467" y="382">z = 0</label>
 		</transition>
 		<transition>
 			<source ref="id81"/>
@@ -2191,7 +2214,7 @@ dedicatedSlot(bs, id)</label>
 	</template>
 	<template>
 		<name>UserStates</name>
-		<parameter>int id, int start_offset</parameter>
+		<parameter>int id, int24_t start_offset</parameter>
 		<declaration>// --------------------------------------------------------------------------------------------
 // VARIABLES
 // --------------------------------------------------------------------------------------------
@@ -2204,7 +2227,7 @@ int mode = 0;    // 1 - Listen Only, 2 - Streaming
 // FUNCTIONS
 // --------------------------------------------------------------------------------------------
 
-int getOffset()
+int24_t getOffset()
 {
     if(start_offset == -1) {
         setOffset();
@@ -2579,6 +2602,15 @@ x &lt;= getLatency(id)</label>
 		</branchpoint>
 		<init ref="id104"/>
 		<transition>
+			<source ref="id126"/>
+			<target ref="id128"/>
+			<label kind="guard" x="-1045" y="-714">!dedicatedSlot(bs, id) &amp;&amp;
+!ACK[id]</label>
+			<label kind="assignment" x="-1045" y="-680">ch = getCh(id, ch)</label>
+			<nail x="-918" y="-663"/>
+			<nail x="-1275" y="-663"/>
+		</transition>
+		<transition>
 			<source ref="id129"/>
 			<target ref="id124"/>
 			<label kind="assignment" x="-1147" y="-612">ch = getCh(id, ch)</label>
@@ -2681,7 +2713,8 @@ z = 0</label>
 		<transition>
 			<source ref="id126"/>
 			<target ref="id119"/>
-			<label kind="guard" x="-1020" y="-595">!dedicatedSlot(bs, id)</label>
+			<label kind="guard" x="-1020" y="-612">!dedicatedSlot(bs, id) &amp;&amp;
+ACK[id]</label>
 			<label kind="synchronisation" x="-1020" y="-578">sleep[id]!</label>
 			<label kind="assignment" x="-1020" y="-561">disconnect = 0,
 ch = getCh(id, ch)</label>
@@ -3229,6 +3262,7 @@ usr_1lt = UserListenOnly(0);
 usr_1s = UserStream(0);
 usr_1sm = UserSample(0, 48, 16.0, 1);
 usr_1sl = UserSleep(0);
+usr_1ip = InternalUEProcessing(0, 6250);
 
 usr_2 = UserStates(1, 0);
 usr_2c = UserConnect(1);
@@ -3236,6 +3270,35 @@ usr_2j = UserJoined(1);
 usr_2lt = UserListenOnly(1);
 usr_2s = UserStream(1);
 usr_2sm = UserSample(1, 48, 16, 1);
+usr_2sl = UserSleep(1);
+usr_2ip = InternalUEProcessing(1, 6250);
+
+usr_3 = UserStates(2, 50000);
+usr_3c = UserConnect(2);
+usr_3j = UserJoined(2);
+usr_3lt = UserListenOnly(2);
+usr_3s = UserStream(2);
+usr_3sm = UserSample(2, 48, 16.0, 1);
+usr_3sl = UserSleep(2);
+usr_3ip = InternalUEProcessing(2, 6250);
+
+usr_4 = UserStates(3, 1000);
+usr_4c = UserConnect(3);
+usr_4j = UserJoined(3);
+usr_4lt = UserListenOnly(3);
+usr_4s = UserStream(3);
+usr_4sm = UserSample(3, 48, 16.0, 1);
+usr_4sl = UserSleep(3);
+usr_4ip = InternalUEProcessing(3, 6250);
+
+usr_5 = UserStates(4, 20000);
+usr_5c = UserConnect(4);
+usr_5j = UserJoined(4);
+usr_5lt = UserListenOnly(4);
+usr_5s = UserStream(4);
+usr_5sm = UserSample(4, 48, 16.0, 1);
+usr_5sl = UserSleep(4);
+usr_5ip = InternalUEProcessing(4, 6250);
 
 bs_1 = BaseStation(0);
 bs_1clk = FrameClock(0);
@@ -3245,10 +3308,16 @@ bs_1ip = InternalBSProcessing(0, 6250);
 bs_2 = BaseStation(1);
 bs_2clk = FrameClock(1);
 bs_2s = Scheduler(1);
-bs_2ip = InternalUEProcessing(1, 6250);
+bs_2ip = InternalBSProcessing(1, 6250);
 
 // List one or more processes to be composed into a system.
-system bs_1, bs_1clk, bs_1s, bs_1ip, bs_2, bs_2clk, bs_2s, bs_2ip, usr_1, usr_1sl, usr_1s, usr_1c, usr_1j, usr_1lt, usr_1sm; </system>
+system bs_1, bs_1clk, bs_1s, bs_1ip,
+//bs_2, bs_2clk, bs_2s, bs_2ip,
+usr_1, usr_1sl, usr_1c, usr_1j, //usr_1s, usr_1lt, usr_1sm, usr_1ip,
+usr_2, usr_2sl, usr_2c, usr_2j, // usr_2s, usr_2lt, usr_2sm, usr_2ip,
+usr_3, usr_3sl, usr_3c, usr_3j, // usr_3s, usr_3lt, usr_3sm, usr_3ip,
+usr_4, usr_4sl, usr_4c, usr_4j, // usr_4s, usr_4lt, usr_4sm, usr_4ip,
+usr_5, usr_5sl, usr_5c, usr_5j; // usr_5s, usr_5lt, usr_5sm, usr_5ip;</system>
 	<queries>
 		<query>
 			<formula>E&lt;&gt; ( bs_1.TRANSMIT_BCH and bs_1s.INITIAL and bs_1ip.INITIAL and bs_2.TRANSMIT_BCH and bs_2s.INITIAL and bs_2ip.INITIAL and usr_1.ON and usr_1s.INITIAL and usr_1c.INITIAL and usr_1j.INITIAL and usr_1lt.INITIAL and usr_1sm.INITIAL )</formula>
