@@ -1416,7 +1416,7 @@ void NACK()
 		</location>
 		<location id="id40" x="-680" y="-850">
 			<name x="-731" y="-901">SWITCH_CHANNEL</name>
-			<label kind="invariant" x="-731" y="-884">x &lt;= (channel_switch/2 - 100)</label>
+			<label kind="invariant" x="-731" y="-884">x &lt;= channel_switch/2</label>
 		</location>
 		<location id="id41" x="-722" y="-578" color="#ffa500">
 			<name x="-705" y="-595">WAIT_SLOT</name>
@@ -1525,15 +1525,14 @@ frame_clk[bs] &gt;= slot_start[bs][ue]</label>
 		<transition>
 			<source ref="id40"/>
 			<target ref="id38"/>
-			<label kind="guard" x="-663" y="-850">x &gt;= (channel_switch/2 - 100)</label>
+			<label kind="guard" x="-663" y="-850">x &gt;= channel_switch/2</label>
 			<label kind="assignment" x="-663" y="-833">x = 0</label>
 		</transition>
 		<transition>
 			<source ref="id39"/>
 			<target ref="id41"/>
-			<label kind="guard" x="-875" y="-731">x &gt;= GI &amp;&amp;
-slot &lt; number_slots[bs]</label>
-			<label kind="assignment" x="-876" y="-697">current_slot[bs] = slot,
+			<label kind="guard" x="-782" y="-731">x &gt;= GI</label>
+			<label kind="assignment" x="-875" y="-714">current_slot[bs] = slot,
 ue = owner[bs][slot],
 GI = GI_size[bs],
 RACH_id[bs] = -1</label>
@@ -1558,14 +1557,13 @@ RACH_id[bs] = -1</label>
 			<label kind="guard" x="-969" y="-918">!retransmission[bs]</label>
 		</transition>
 		<transition>
-			<source ref="id39"/>
+			<source ref="id36"/>
 			<target ref="id33"/>
-			<label kind="guard" x="-1105" y="-858">x &gt;= GI &amp;&amp;
-slot &gt;= number_slots[bs]</label>
-			<label kind="assignment" x="-1105" y="-824">x = 0,
+			<label kind="guard" x="-1139" y="-875">slot &gt;= number_slots[bs]</label>
+			<label kind="assignment" x="-1130" y="-850">x = 0,
 retransmission[bs] = !retransmission[bs],
 ch = setCh()</label>
-			<nail x="-841" y="-773"/>
+			<nail x="-1139" y="-850"/>
 		</transition>
 		<transition>
 			<source ref="id32"/>
@@ -1592,6 +1590,7 @@ GI = GI_size[bs] - qca_processing</label>
 		<transition>
 			<source ref="id36"/>
 			<target ref="id39"/>
+			<label kind="guard" x="-1011" y="-765">slot &lt; number_slots[bs]</label>
 		</transition>
 		<transition>
 			<source ref="id32"/>
