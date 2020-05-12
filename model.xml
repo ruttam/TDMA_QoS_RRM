@@ -114,8 +114,6 @@ const int offsets[2][UEid_t] =
 
 // VARIABLES ----------------------------------------------------------------------------------
 
-int start_offsets[UEid_t] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0};    // default offset of UE start signal
-
 int BS_assignment[UEid_t] = {-1, -1, -1, -1, -1, -1, -1, -1, -1, -1};    // initial association with the BS
 
 // FUNCTIONS ----------------------------------------------------------------------------------
@@ -123,12 +121,6 @@ int BS_assignment[UEid_t] = {-1, -1, -1, -1, -1, -1, -1, -1, -1, -1};    // init
 int getBS(UEid_t id)
 {
     return BS_assignment[id];
-}
-
-void setOffset()    // setting offset values from possible variations in offsets
-{
-    if(offset_used != -1)
-        for(i: UEid_t) start_offsets[i] = offsets[offset_used][i] * 1000 * unit;
 }
 
 bool dedicatedSlot(BSid_t bs, UEid_t id)
@@ -658,7 +650,7 @@ int getCh(UEid_t id, int ch)
 </declaration>
 	<template>
 		<name>InternalUEProcessing</name>
-		<parameter>UEid_t id, int uart_speed</parameter>
+		<parameter>UEid_t id</parameter>
 		<declaration>// --------------------------------------------------------------------------------------------
 // CONSTANTS
 // --------------------------------------------------------------------------------------------
@@ -670,6 +662,8 @@ const int internal_processing = 50;    // us
 const int cb_processing = 50;    // audio data processing time in central base (in us)
 
 const int decode_time = 1/(44000 * 1000000);    // audio decoding time with 44kHz packet rate (in us)
+
+const int uart_speed[UEid_t] = {6250, 6250, 6250, 6250, 6250, 6250, 6250, 6250, 6250, 6250};
 
 // --------------------------------------------------------------------------------------------
 // VARIABLES
@@ -706,7 +700,7 @@ int getUARTTime()
 {
     
     int bs = getBS(id);
-    return getULAudioData(bs)/(uart_speed/1000);
+    return getULAudioData(bs)/(uart_speed[id]/1000);
 }
 
 // --------------------------------------------------------------------------------------------
@@ -918,7 +912,7 @@ x &lt;= sleep_latency</label>
 	</template>
 	<template>
 		<name>InternalBSProcessing</name>
-		<parameter>BSid_t bs, int uart_speed</parameter>
+		<parameter>BSid_t bs</parameter>
 		<declaration>// --------------------------------------------------------------------------------------------
 // CONSTANTS
 // --------------------------------------------------------------------------------------------
@@ -930,6 +924,8 @@ const int internal_processing = 50;    // us
 const int cb_processing = 50;    // audio data processing time in central base (in us)
 
 const int decode_time = 1/(44000 * 1000000);    // audio decoding time with 44kHz packet rate (in us)
+
+const int uart_speed[BSid_t] = {6250, 6250};
 
 // --------------------------------------------------------------------------------------------
 // VARIABLES
@@ -962,7 +958,7 @@ int getDataType()
 
 int getUARTTime()
 {
-    return getULAudioData(bs)/(uart_speed/1000);
+    return getULAudioData(bs)/(uart_speed[bs]/1000);
 }
 
 // --------------------------------------------------------------------------------------------
@@ -2206,34 +2202,28 @@ dedicatedSlot(bs, id)</label>
 	</template>
 	<template>
 		<name>UserStates</name>
-		<parameter>int id, int24_t start_offset</parameter>
+		<parameter>int id</parameter>
 		<declaration>// --------------------------------------------------------------------------------------------
+// CONSTANTS
+// --------------------------------------------------------------------------------------------
+
+const int24_t start_offsets[UEid_t] = {5000, 0, 50000, 1000, 20000, 750, 100, 3030, 0, 2500};    // offsets of the UE start signal
+
+// --------------------------------------------------------------------------------------------
 // VARIABLES
 // --------------------------------------------------------------------------------------------
 
 clock offset;    // start offset timer
 
-int mode = 0;    // 1 - Listen Only, 2 - Streaming
+int mode = 0;    // 0 - Initial, 1 - Listen Only, 2 - Streaming
 
 // --------------------------------------------------------------------------------------------
 // FUNCTIONS
 // --------------------------------------------------------------------------------------------
-
-int24_t getOffset()
-{
-    if(start_offset == -1) {
-        setOffset();
-        return start_offsets[id];
-    }
-    else
-    {
-        return start_offset;
-    }
-    return 0;
-}</declaration>
+</declaration>
 		<location id="id94" x="-15130" y="-15266" color="#ffffff">
-			<name x="-15172" y="-15283">INIT</name>
-			<label kind="invariant" x="-15223" y="-15266">offset' == 0</label>
+			<name x="-15172" y="-15291">INIT</name>
+			<label kind="invariant" x="-15223" y="-15274">offset' == 0</label>
 			<urgent/>
 		</location>
 		<location id="id95" x="-15130" y="-14705">
@@ -2256,10 +2246,10 @@ int24_t getOffset()
 			<name x="-15240" y="-15113">CONNECTING</name>
 			<label kind="invariant" x="-15223" y="-15096">offset' == 0</label>
 		</location>
-		<location id="id100" x="-15130" y="-15181">
-			<name x="-15113" y="-15198">ON</name>
-			<label kind="invariant" x="-15113" y="-15181">offset' == 1 &amp;&amp;
-offset &lt;= start_offset</label>
+		<location id="id100" x="-15130" y="-15198">
+			<name x="-15113" y="-15223">ON</name>
+			<label kind="invariant" x="-15113" y="-15206">offset' == 1 &amp;&amp;
+offset &lt;= start_offsets[id]</label>
 		</location>
 		<location id="id101" x="-15130" y="-14858">
 			<name x="-15198" y="-14875">JOINED</name>
@@ -2301,26 +2291,26 @@ offset &lt;= start_offset</label>
 		<transition>
 			<source ref="id102"/>
 			<target ref="id101"/>
-			<label kind="guard" x="-15104" y="-14875">mode == 0</label>
-			<label kind="synchronisation" x="-15104" y="-14858">wake_up[id]?</label>
-			<label kind="assignment" x="-15104" y="-14841">sleeping[id] = 0</label>
+			<label kind="guard" x="-15079" y="-14875">mode == 0</label>
+			<label kind="synchronisation" x="-15079" y="-14858">wake_up[id]?</label>
+			<label kind="assignment" x="-15079" y="-14841">sleeping[id] = 0</label>
 		</transition>
 		<transition>
 			<source ref="id102"/>
 			<target ref="id96"/>
-			<label kind="guard" x="-14875" y="-14875">mode == 2</label>
-			<label kind="synchronisation" x="-14875" y="-14858">wake_up[id]?</label>
-			<label kind="assignment" x="-14875" y="-14841">sleeping[id] = 0</label>
+			<label kind="guard" x="-14883" y="-14875">mode == 2</label>
+			<label kind="synchronisation" x="-14883" y="-14858">wake_up[id]?</label>
+			<label kind="assignment" x="-14883" y="-14841">sleeping[id] = 0</label>
 			<nail x="-14773" y="-14858"/>
 		</transition>
 		<transition>
 			<source ref="id102"/>
 			<target ref="id95"/>
-			<label kind="guard" x="-14926" y="-14815">mode == 1</label>
-			<label kind="synchronisation" x="-14926" y="-14798">wake_up[id]?</label>
-			<label kind="assignment" x="-14926" y="-14781">sleeping[id] = 0</label>
-			<nail x="-14934" y="-14773"/>
-			<nail x="-15113" y="-14773"/>
+			<label kind="guard" x="-14926" y="-14807">mode == 1</label>
+			<label kind="synchronisation" x="-14926" y="-14790">wake_up[id]?</label>
+			<label kind="assignment" x="-14926" y="-14773">sleeping[id] = 0</label>
+			<nail x="-14934" y="-14756"/>
+			<nail x="-15113" y="-14756"/>
 		</transition>
 		<transition>
 			<source ref="id95"/>
@@ -2341,10 +2331,9 @@ offset &lt;= start_offset</label>
 		<transition>
 			<source ref="id103"/>
 			<target ref="id96"/>
-			<label kind="guard" x="-15104" y="-15036">static_profile[id] == RTa ||
-static_profile[id] == HqRTa</label>
-			<label kind="synchronisation" x="-14824" y="-15019">stream[id]!</label>
-			<label kind="assignment" x="-14824" y="-14994">mode = 2</label>
+			<label kind="guard" x="-15104" y="-15019">static_profile[id] == RTa || static_profile[id] == HqRTa</label>
+			<label kind="synchronisation" x="-14832" y="-14994">stream[id]!</label>
+			<label kind="assignment" x="-14832" y="-14977">mode = 2</label>
 			<nail x="-14756" y="-14994"/>
 		</transition>
 		<transition>
@@ -2358,9 +2347,9 @@ static_profile[id] == HqRTa</label>
 		<transition>
 			<source ref="id100"/>
 			<target ref="id99"/>
-			<label kind="guard" x="-15266" y="-15172">offset &gt;= start_offset</label>
-			<label kind="synchronisation" x="-15206" y="-15155">started[id]!</label>
-			<label kind="assignment" x="-15198" y="-15138">offset = 0</label>
+			<label kind="guard" x="-15121" y="-15164">offset &gt;= start_offsets[id]</label>
+			<label kind="synchronisation" x="-15121" y="-15147">started[id]!</label>
+			<label kind="assignment" x="-15121" y="-15130">offset = 0</label>
 		</transition>
 		<transition>
 			<source ref="id99"/>
@@ -2377,7 +2366,7 @@ static_profile[id] == HqRTa</label>
 		<transition>
 			<source ref="id97"/>
 			<target ref="id95"/>
-			<label kind="guard" x="-15096" y="-14722">mode == 1</label>
+			<label kind="guard" x="-15062" y="-14705">mode == 1</label>
 		</transition>
 		<transition>
 			<source ref="id95"/>
@@ -2395,24 +2384,24 @@ static_profile[id] == HqRTa</label>
 		<transition>
 			<source ref="id96"/>
 			<target ref="id98"/>
-			<label kind="synchronisation" x="-14722" y="-14934">disconnected[id]?</label>
+			<label kind="synchronisation" x="-14722" y="-15019">disconnected[id]?</label>
 		</transition>
 		<transition>
 			<source ref="id97"/>
 			<target ref="id96"/>
-			<label kind="guard" x="-14841" y="-14722">mode == 2</label>
+			<label kind="guard" x="-14858" y="-14705">mode == 2</label>
 		</transition>
 		<transition>
 			<source ref="id95"/>
 			<target ref="id97"/>
-			<label kind="synchronisation" x="-15087" y="-14756">failed[id]?</label>
+			<label kind="synchronisation" x="-15062" y="-14739">failed[id]?</label>
 			<nail x="-15096" y="-14739"/>
 			<nail x="-14959" y="-14739"/>
 		</transition>
 		<transition>
 			<source ref="id96"/>
 			<target ref="id97"/>
-			<label kind="synchronisation" x="-14841" y="-14756">failed[id]?</label>
+			<label kind="synchronisation" x="-14858" y="-14739">failed[id]?</label>
 			<nail x="-14764" y="-14739"/>
 			<nail x="-14909" y="-14739"/>
 		</transition>
@@ -2434,8 +2423,7 @@ static_profile[id] == HqRTa</label>
 		<transition>
 			<source ref="id94"/>
 			<target ref="id100"/>
-			<label kind="assignment" x="-15121" y="-15249">offset = 0,
-start_offset = getOffset()</label>
+			<label kind="assignment" x="-15121" y="-15249">offset = 0</label>
 		</transition>
 	</template>
 	<template>
@@ -3131,7 +3119,7 @@ profile[id] = initial</label>
 	</template>
 	<template>
 		<name>UserSample</name>
-		<parameter>UEid_t id, int audio_quality, double bit_depth, int uart_speed</parameter>
+		<parameter>UEid_t id</parameter>
 		<declaration>// id: UE identification number
 // audio_quality: audio sampling rate (kHz or kb/s)
 // bit_depth: bits per sample]
@@ -3140,6 +3128,12 @@ profile[id] = initial</label>
 // --------------------------------------------------------------------------------------------
 // CONSTANTS
 // --------------------------------------------------------------------------------------------
+
+int audio_quality[UEid_t] = {48, 48, 48, 48, 48, 48, 48, 48, 48, 48};
+
+int bit_depth[UEid_t] = {16, 16, 16, 16, 16, 16, 16, 16, 16, 16};
+
+int uart_speed[UEid_t] = {1, 1, 1, 1, 1, 1, 1, 1, 1, 1};
 
 // --------------------------------------------------------------------------------------------
 // VARIABLES
@@ -3160,11 +3154,10 @@ int uart_latency = 0;    // UART transmission of audio data latency (in us)
 int getSampleTime()
 {
     // if audio quality is in bit rate (kbps)
-    double sample_rate = audio_quality/bit_depth;    // kHz = 1000 * samples/s
+    int sample_rate = audio_quality[id]/bit_depth[id];    // kHz = 1000 * samples/s
     // if audio quality is in sample rate (kHz)
-    double time_per_sample = 1/(sample_rate * 1000 * 1000 * unit);    // us * unit
-    int result = fint(time_per_sample);
-    return result;
+    int time_per_sample = 1/(sample_rate * 1000 * 1000 * unit);    // us * unit
+    return time_per_sample;
 }
 
 void getNumberSamples()
@@ -3172,12 +3165,12 @@ void getNumberSamples()
     //int time = getSampleTime();
     //samples = frame_size[bs]/time;
     //return fint(frame_size[bs]/time);
-    samples_ready[id] = audio_quality * (frame_size[bs]/1000);
+    samples_ready[id] = audio_quality[id] * (frame_size[bs]/1000);
 }
 
 int getUARTTime()
 {
-    //return fint((samples_ready[id] * bit_depth) / (uart_speed * 1000));
+    //return fint((samples_ready[id] * bit_depth[id]) / (uart_speed[id] * 1000));
     return 10;
 }</declaration>
 		<location id="id148" x="-764" y="-654">
@@ -3253,60 +3246,60 @@ bs = getBS(id)</label>
 		</transition>
 	</template>
 	<system>// Place template instantiations here.
-usr_1 = UserStates(0, 5000);
+usr_1 = UserStates(0);
 usr_1c = UserConnect(0);
 usr_1j = UserJoined(0);
 usr_1lt = UserListenOnly(0);
 usr_1s = UserStream(0);
-usr_1sm = UserSample(0, 48, 16.0, 1);
+usr_1sm = UserSample(0);
 usr_1sl = UserSleep(0);
-usr_1ip = InternalUEProcessing(0, 6250);
+usr_1ip = InternalUEProcessing(0);
 
-usr_2 = UserStates(1, 0);
+usr_2 = UserStates(1);
 usr_2c = UserConnect(1);
 usr_2j = UserJoined(1);
 usr_2lt = UserListenOnly(1);
 usr_2s = UserStream(1);
-usr_2sm = UserSample(1, 48, 16, 1);
+usr_2sm = UserSample(1);
 usr_2sl = UserSleep(1);
-usr_2ip = InternalUEProcessing(1, 6250);
+usr_2ip = InternalUEProcessing(1);
 
-usr_3 = UserStates(2, 50000);
+usr_3 = UserStates(2);
 usr_3c = UserConnect(2);
 usr_3j = UserJoined(2);
 usr_3lt = UserListenOnly(2);
 usr_3s = UserStream(2);
-usr_3sm = UserSample(2, 48, 16.0, 1);
+usr_3sm = UserSample(2);
 usr_3sl = UserSleep(2);
-usr_3ip = InternalUEProcessing(2, 6250);
+usr_3ip = InternalUEProcessing(2);
 
-usr_4 = UserStates(3, 1000);
+usr_4 = UserStates(3);
 usr_4c = UserConnect(3);
 usr_4j = UserJoined(3);
 usr_4lt = UserListenOnly(3);
 usr_4s = UserStream(3);
-usr_4sm = UserSample(3, 48, 16.0, 1);
+usr_4sm = UserSample(3);
 usr_4sl = UserSleep(3);
-usr_4ip = InternalUEProcessing(3, 6250);
+usr_4ip = InternalUEProcessing(3);
 
-usr_5 = UserStates(4, 20000);
+usr_5 = UserStates(4);
 usr_5c = UserConnect(4);
 usr_5j = UserJoined(4);
 usr_5lt = UserListenOnly(4);
 usr_5s = UserStream(4);
-usr_5sm = UserSample(4, 48, 16.0, 1);
+usr_5sm = UserSample(4);
 usr_5sl = UserSleep(4);
-usr_5ip = InternalUEProcessing(4, 6250);
+usr_5ip = InternalUEProcessing(4);
 
 bs_1 = BaseStation(0);
 bs_1clk = FrameClock(0);
 bs_1s = Scheduler(0);
-bs_1ip = InternalBSProcessing(0, 6250);
+bs_1ip = InternalBSProcessing(0);
 
 bs_2 = BaseStation(1);
 bs_2clk = FrameClock(1);
 bs_2s = Scheduler(1);
-bs_2ip = InternalBSProcessing(1, 6250);
+bs_2ip = InternalBSProcessing(1);
 
 // List one or more processes to be composed into a system.
 system bs_1, bs_1clk, bs_1s, bs_1ip,
