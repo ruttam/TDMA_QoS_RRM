@@ -28,7 +28,7 @@ const profileId_t sRTa = 2;           // Sporadic Real-Time Audio
 const profileId_t RTa = 3;            // Real-Time Audio
 const profileId_t HqRTa = 4;          // High-Quality Real-Time Audio
 
-typedef int[-(1&lt;&lt;23),(1&lt;&lt;23)-1] int24_t;
+typedef int[-(1&lt;&lt;29),(1&lt;&lt;29)-1] int24_t;
 const int latency[profileId_t] = {-1, 2500, 70, 40, 20};    // latency requirements of each type of profiles
 
 // const int audio_quality[profileId_t] = {-1, 32, 32, 48, 192};    // audio quality requirements (in kbits/s) of each type of profiles
@@ -57,26 +57,26 @@ int GI[BSid_t] = {400, 400};    // required GI size according to the MCS used (i
 
 int GI_size[BSid_t] = {0, 0};    // actual GI size of the current frame (in us)
 
-typedef int [0, number_UE + 2] slotID_t;
+typedef int [0, number_UE * 2 + 1] slotID_t;
 
 int owner[BSid_t][slotID_t] = {
-    {-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1},
-    {-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1}
+    {-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1},
+    {-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1}
 };
 
 int slot_start[BSid_t][slotID_t] = {    // start times of dedicated TCH slots for the nodes in current frame + RACH
-    {-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1},
-    {-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1}
+    {-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1},
+    {-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1}
 };
 
 int slot_size[BSid_t][slotID_t] = {    // sizes of dedicated TCH slots for the nodes in current frame + RACH (ms * unit)
-    {-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1},
-    {-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1}
+    {-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1},
+    {-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1}
 };
 
 int24_t slot_data[BSid_t][slotID_t] = {    // data sizes of dedicated TCH slots in current frame + RACH (in bits)
-    {-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1},
-    {-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1}
+    {-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1},
+    {-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1}
 };
 
 // --------------------------------------------------------------------------------------------
@@ -590,7 +590,7 @@ void addUE(BSid_t bs, UEid_t id)
 
 // CONSTANTS ----------------------------------------------------------------------------------
 
-broadcast chan DL[number_channels];    // DL ACK signal from BS to UEs
+broadcast chan DL[number_UE];    // DL ACK signal from BS to UEs
 
 broadcast chan sleep[UEid_t];    // UE signal for RF module to sleep
 
@@ -894,7 +894,8 @@ x &lt;= sleep_latency</label>
 		<transition>
 			<source ref="id10"/>
 			<target ref="id7"/>
-			<label kind="synchronisation" x="-765" y="-510">wake_up[id]!</label>
+			<label kind="synchronisation" x="-765" y="-527">wake_up[id]!</label>
+			<label kind="assignment" x="-765" y="-510">sleep_time[id] = 0</label>
 			<nail x="-765" y="-484"/>
 		</transition>
 		<transition>
@@ -1065,7 +1066,7 @@ int j = 0;
 Node_t ue;
 int UL_duration = 0;
 int ACK_duration = 0;
-int slot_count = 3;    // initial number of slots: BCH, ACK BCH and RACH
+int slot_count = 2;    // initial number of slots: BCH and RACH
 int start_time = 0;
 int transmission_duration;
 
@@ -1108,7 +1109,7 @@ void processQueue(Queue_t queue, bool audio)
     	        else
 	                duration = getULMetaDuration(bs);
     
-    	        temp_GI = (transmission_duration - (BCH_duration[bs] + (UL_duration + duration) + ACK_duration + RACH_size[bs] + channel_switch/2))/(slot_count + 1);
+    	        temp_GI = ((transmission_duration - (BCH_duration[bs] + (UL_duration + duration) + ACK_duration + RACH_size[bs] + channel_switch/2))/(slot_count + 2));
 	            // verify GI size
 	            if(!verifyGI(temp_GI))
 	                return;
@@ -1121,14 +1122,12 @@ void processQueue(Queue_t queue, bool audio)
 	            slot_start[bs][ue.id] = start_time;
 	            start_time += slot_size[bs][ue.id];
 
-                owner[bs][j++] = number_UE;
-                slot_size[bs][number_UE] = ACK_duration;
-                // slot_data[bs][number_UE] = getACKData();
-                slot_start[bs][number_UE] = start_time;
-                start_time += slot_size[bs][ue.id];
-                start_time = start_time + slot_size[bs][number_UE];
+                // DL ACK
+                owner[bs][j++] = number_UE + ue.id;
+                slot_size[bs][number_UE + ue.id] = ACK_duration;
+                slot_start[bs][number_UE + ue.id] = start_time;
+                start_time += slot_size[bs][number_UE + ue.id];
                 slot_count += 1;
-                number_slots[bs] = slot_count;
             }
             else
             {
@@ -1171,60 +1170,51 @@ void scheduleFrame()
 {
     int i = 0;
     j = 0;
-    slot_count = 3;
+    slot_count = 2;
     start_time = 0;
     transmission_duration = frame_size[bs]/2;
     
     resetSlots();
 
     // BCH
-    owner[bs][j++] = number_UE + 2;
+    owner[bs][j++] = number_UE * 2 + 1;
     if(!retransmission[bs])
     {
-        slot_start[bs][number_UE + 2] = 0;
+        slot_start[bs][number_UE * 2 + 1] = 0;
     }
     else
     {
-        slot_start[bs][number_UE + 2] = channel_switch/2;
+        slot_start[bs][number_UE * 2 + 1] = channel_switch/2;
     }
-
-    slot_size[bs][number_UE + 2] = getBCH();
-    start_time += slot_size[bs][number_UE + 2];
+    slot_size[bs][number_UE * 2 + 1] = getBCH();
+    start_time += slot_start[bs][number_UE * 2 + 1] + slot_size[bs][number_UE * 2 + 1];
 
     // RACH
     RACH_size[bs] = getRACHDuration(bs);
-    owner[bs][j++] = number_UE + 1;
-    slot_size[bs][number_UE + 1] = RACH_size[bs];
-    slot_start[bs][number_UE + 1] = start_time;
-    RACH_slot[bs] = number_UE + 1;
+    owner[bs][j++] = number_UE * 2;
+    slot_size[bs][number_UE * 2] = RACH_size[bs];
+    slot_start[bs][number_UE * 2] = start_time;
+    RACH_slot[bs] = number_UE * 2;
     start_time += RACH_size[bs];
 
     ACK_duration = getACKDuration(bs);
-    GI_size[bs] = (transmission_duration - (slot_size[bs][number_UE + 2] + UL_duration + ACK_duration + RACH_size[bs] + channel_switch/2))/slot_count;
+    GI_size[bs] = (transmission_duration - (slot_size[bs][number_UE * 2 + 1] + UL_duration + ACK_duration + RACH_size[bs] + channel_switch/2))/(slot_count + 2);
     // verify GI size
     if(!verifyGI(GI_size[bs]))
         return;
 
     processQueue(priority_queue[bs], true);
     processQueue(request_queue[bs], false);
-    number_slots[bs] = slot_count - 1;
+    number_slots[bs] = slot_count;
 
-    // ACK BCH
-    //if(slot_count &gt; 3) {
-    //    owner[bs][j++] = number_UE;
-    //    slot_size[bs][number_UE] = ACK_duration;
-        // slot_data[bs][number_UE] = getACKData();
-     //   slot_start[bs][number_UE] = start_time;
-     //   start_time = start_time + slot_size[bs][number_UE];
-    //    number_slots[bs] = slot_count;
-   //     number_slots[bs] = slot_count;
-    //}
-   
-
-    for(i = 1; i &lt; number_slots[bs] + 2; i++)
+    if(slot_count &lt; 3)
     {
-        if(owner[bs][i] != -1)
-            slot_start[bs][owner[bs][i]] = slot_start[bs][owner[bs][i-1]] + slot_size[bs][owner[bs][i-1]] + GI_size[bs];
+        GI_size[bs] = ((transmission_duration - (slot_size[bs][number_UE * 2 + 1] + RACH_size[bs] + channel_switch/2))/slot_count) - 1;
+    }
+
+    for(i = 1; i &lt; number_slots[bs]; i++)
+    {
+        slot_start[bs][owner[bs][i]] += i * GI_size[bs];
     }
     RACH_start[bs] = slot_start[bs][RACH_slot[bs]];
     
@@ -1312,7 +1302,8 @@ void scheduleFrame()
 		<transition>
 			<source ref="id28"/>
 			<target ref="id27"/>
-			<label kind="synchronisation" x="-671" y="-68">frame_start[bs]!</label>
+			<label kind="synchronisation" x="-671" y="-76">frame_start[bs]!</label>
+			<label kind="assignment" x="-680" y="-59">frame_clk[bs] = 0</label>
 		</transition>
 		<transition>
 			<source ref="id27"/>
@@ -1352,7 +1343,7 @@ UEid_t new;    // ID of current slot's owner (UE)
 
 int slot = 0;    // slot counter during the frame execution
 
-bool success[slotID_t] = {false, false, false, false, false, false, false, false, false, false, false, false, false};
+bool success[slotID_t] = {false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false};
 
 int GI;
 
@@ -1415,22 +1406,21 @@ void NACK()
 			<name x="-960" y="-977">TRANSMISSION</name>
 			<urgent/>
 		</location>
-		<location id="id38" x="-502" y="-850" color="#ffff00">
-			<name x="-484" y="-875">RETRANSMISSION</name>
+		<location id="id38" x="-476" y="-850" color="#ffff00">
+			<name x="-535" y="-833">RETRANSMISSION</name>
 			<urgent/>
 		</location>
-		<location id="id39" x="-722" y="-740">
-			<name x="-748" y="-807">GUARD</name>
-			<label kind="invariant" x="-756" y="-790">x' == 1 &amp;&amp;
-x &lt;= GI</label>
+		<location id="id39" x="-722" y="-739">
+			<name x="-748" y="-789">GUARD</name>
+			<label kind="invariant" x="-748" y="-772">x &lt;= GI</label>
 		</location>
 		<location id="id40" x="-680" y="-850">
 			<name x="-731" y="-901">SWITCH_CHANNEL</name>
-			<label kind="invariant" x="-731" y="-884">x &lt;= channel_switch/2</label>
+			<label kind="invariant" x="-731" y="-884">x &lt;= (channel_switch/2 - 100)</label>
 		</location>
-		<location id="id41" x="-722" y="-612" color="#ffa500">
-			<name x="-705" y="-629">WAIT_SLOT</name>
-			<label kind="invariant" x="-705" y="-612">frame_clk[bs] &lt;= slot_start[bs][ue]</label>
+		<location id="id41" x="-722" y="-578" color="#ffa500">
+			<name x="-705" y="-595">WAIT_SLOT</name>
+			<label kind="invariant" x="-705" y="-578">frame_clk[bs] &lt;= slot_start[bs][ue]</label>
 		</location>
 		<location id="id42" x="-1139" y="-306" color="#ff00ff">
 			<name x="-1190" y="-289">PROCESS_QCA</name>
@@ -1445,31 +1435,30 @@ x &lt;= GI</label>
 		<location id="id44" x="-323" y="-960" color="#ffa500">
 			<name x="-365" y="-994">WAIT_READY</name>
 		</location>
-		<location id="id45" x="-501" y="-960" color="#ff00ff">
-			<name x="-535" y="-1011">PREPARE</name>
-			<label kind="invariant" x="-527" y="-994">x' == 0</label>
+		<location id="id45" x="-475" y="-960" color="#ff00ff">
+			<name x="-509" y="-1011">PREPARE</name>
+			<label kind="invariant" x="-501" y="-994">x' == 0</label>
 			<urgent/>
 		</location>
 		<location id="id46" x="-1139" y="-468">
-			<label kind="invariant" x="-1190" y="-493">x' == 0</label>
 			<urgent/>
 		</location>
-		<location id="id47" x="-1028" y="-612" color="#6c3483">
-			<name x="-1071" y="-646">TRANSMIT_DL</name>
+		<location id="id47" x="-977" y="-578" color="#6c3483">
+			<name x="-1011" y="-620">TRANSMIT_DL</name>
 			<urgent/>
 		</location>
 		<location id="id48" x="-442" y="-740">
-			<label kind="invariant" x="-527" y="-722">x &lt;= slot_size[bs][number_UE + 2]</label>
+			<label kind="invariant" x="-527" y="-722">x &lt;= slot_size[bs][owner[bs][0]]</label>
 		</location>
 		<location id="id49" x="-323" y="-816">
 			<name x="-306" y="-833">WAIT_BCH</name>
-			<label kind="invariant" x="-306" y="-816">x &lt;= slot_start[bs][number_UE + 2]</label>
+			<label kind="invariant" x="-306" y="-816">x &lt;= slot_start[bs][owner[bs][0]]</label>
 		</location>
 		<init ref="id29"/>
 		<transition>
 			<source ref="id49"/>
 			<target ref="id31"/>
-			<label kind="guard" x="-314" y="-790">x &gt;= slot_start[bs][number_UE + 2]</label>
+			<label kind="guard" x="-314" y="-790">x &gt;= slot_start[bs][owner[bs][0]]</label>
 		</transition>
 		<transition>
 			<source ref="id31"/>
@@ -1480,20 +1469,22 @@ x &lt;= GI</label>
 		<transition>
 			<source ref="id47"/>
 			<target ref="id46"/>
-			<label kind="synchronisation" x="-1105" y="-612">DL[ch]!</label>
-			<nail x="-1113" y="-612"/>
+			<label kind="synchronisation" x="-1130" y="-603">DL[ue - number_UE]!</label>
+			<label kind="assignment" x="-1095" y="-578">x = 0</label>
+			<nail x="-1113" y="-578"/>
 		</transition>
 		<transition>
 			<source ref="id41"/>
 			<target ref="id47"/>
-			<label kind="guard" x="-952" y="-612">ue == number_UE &amp;&amp;
-frame_clk[bs] &gt;= slot_start[bs][ue]</label>
+			<label kind="guard" x="-909" y="-595">(ue &gt;= number_UE &amp;&amp;
+ue &lt; number_UE * 2) &amp;&amp;
+frame_clk[bs] &gt;=
+slot_start[bs][ue]</label>
 		</transition>
 		<transition>
 			<source ref="id46"/>
 			<target ref="id36"/>
-			<label kind="assignment" x="-1207" y="-621">slot += 1,
-x = 0</label>
+			<label kind="assignment" x="-1207" y="-621">slot += 1</label>
 		</transition>
 		<transition>
 			<source ref="id42"/>
@@ -1526,14 +1517,15 @@ profile[ue] != 0</label>
 		<transition>
 			<source ref="id41"/>
 			<target ref="id32"/>
-			<label kind="guard" x="-714" y="-569">ue != number_UE &amp;&amp;
+			<label kind="guard" x="-705" y="-552">(ue &lt; number_UE ||
+ue == number_UE * 2) &amp;&amp;
 frame_clk[bs] &gt;= slot_start[bs][ue]</label>
-			<label kind="assignment" x="-714" y="-536">x = 0</label>
+			<label kind="assignment" x="-714" y="-518">x = 0</label>
 		</transition>
 		<transition>
 			<source ref="id40"/>
 			<target ref="id38"/>
-			<label kind="guard" x="-663" y="-850">x &gt;= channel_switch/2</label>
+			<label kind="guard" x="-663" y="-850">x &gt;= (channel_switch/2 - 100)</label>
 			<label kind="assignment" x="-663" y="-833">x = 0</label>
 		</transition>
 		<transition>
@@ -1558,7 +1550,7 @@ RACH_id[bs] = -1</label>
 		<transition>
 			<source ref="id33"/>
 			<target ref="id40"/>
-			<label kind="guard" x="-816" y="-850">retransmission[bs]</label>
+			<label kind="guard" x="-824" y="-850">retransmission[bs]</label>
 		</transition>
 		<transition>
 			<source ref="id33"/>
@@ -1587,7 +1579,8 @@ addUE(bs, ue)</label>
 		<transition>
 			<source ref="id35"/>
 			<target ref="id46"/>
-			<label kind="assignment" x="-1088" y="-493">NACK()</label>
+			<label kind="assignment" x="-1088" y="-510">NACK(),
+x = 0</label>
 		</transition>
 		<transition>
 			<source ref="id34"/>
@@ -1624,7 +1617,7 @@ GI = GI_size[bs] - qca_processing</label>
 		<transition>
 			<source ref="id48"/>
 			<target ref="id39"/>
-			<label kind="guard" x="-680" y="-765">x &gt;= slot_size[bs][number_UE + 2]</label>
+			<label kind="guard" x="-680" y="-765">x &gt;= slot_size[bs][owner[bs][0]]</label>
 			<label kind="assignment" x="-680" y="-739">GI = GI_size[bs],
 slot = 1,
 x = 0</label>
@@ -1936,7 +1929,7 @@ prob_success = getCQI(id)</label>
 		<transition>
 			<source ref="id64"/>
 			<target ref="id66"/>
-			<label kind="synchronisation" x="-1546" y="-1546">DL[ch]?</label>
+			<label kind="synchronisation" x="-1546" y="-1546">DL[id]?</label>
 		</transition>
 		<transition>
 			<source ref="id73"/>
@@ -2103,7 +2096,7 @@ x &lt;= channel_switch</label>
 		<transition>
 			<source ref="id83"/>
 			<target ref="id87"/>
-			<label kind="synchronisation" x="620" y="654">DL[ch]?</label>
+			<label kind="synchronisation" x="620" y="654">DL[id]?</label>
 		</transition>
 		<transition>
 			<source ref="id82"/>
@@ -2241,14 +2234,16 @@ int24_t getOffset()
 }</declaration>
 		<location id="id94" x="-15130" y="-15266" color="#ffffff">
 			<name x="-15172" y="-15283">INIT</name>
-			<label kind="invariant" x="-15223" y="-15266">offset' == 1</label>
+			<label kind="invariant" x="-15223" y="-15266">offset' == 0</label>
 			<urgent/>
 		</location>
 		<location id="id95" x="-15130" y="-14705">
 			<name x="-15240" y="-14706">LISTEN_ONLY</name>
+			<label kind="invariant" x="-15240" y="-14688">offset' == 0</label>
 		</location>
 		<location id="id96" x="-14730" y="-14705">
 			<name x="-14713" y="-14723">STREAMING</name>
+			<label kind="invariant" x="-14713" y="-14705">offset' == 0</label>
 		</location>
 		<location id="id97" x="-14934" y="-14705" color="#4e342e">
 			<name x="-14959" y="-14696">FAILED</name>
@@ -2264,13 +2259,16 @@ int24_t getOffset()
 		</location>
 		<location id="id100" x="-15130" y="-15181">
 			<name x="-15113" y="-15198">ON</name>
-			<label kind="invariant" x="-15113" y="-15181">offset &lt;= start_offset</label>
+			<label kind="invariant" x="-15113" y="-15181">offset' == 1 &amp;&amp;
+offset &lt;= start_offset</label>
 		</location>
 		<location id="id101" x="-15130" y="-14858">
 			<name x="-15198" y="-14875">JOINED</name>
+			<label kind="invariant" x="-15215" y="-14858">offset' == 0</label>
 		</location>
 		<location id="id102" x="-14934" y="-14858" color="#ca6f1e">
-			<name x="-14968" y="-14917">SLEEPING</name>
+			<name x="-14968" y="-14934">SLEEPING</name>
+			<label kind="invariant" x="-14968" y="-14917">offset' == 0</label>
 		</location>
 		<location id="id103" x="-15130" y="-14994">
 			<urgent/>
@@ -2374,7 +2372,8 @@ static_profile[id] == HqRTa</label>
 		<transition>
 			<source ref="id99"/>
 			<target ref="id103"/>
-			<label kind="synchronisation" x="-15121" y="-15070">connected[id]?</label>
+			<label kind="synchronisation" x="-15121" y="-15079">connected[id]?</label>
+			<label kind="assignment" x="-15121" y="-15062">offset = 0</label>
 		</transition>
 		<transition>
 			<source ref="id97"/>
@@ -2694,7 +2693,7 @@ z = 0</label>
 		<transition>
 			<source ref="id122"/>
 			<target ref="id125"/>
-			<label kind="synchronisation" x="-1292" y="-229">DL[ch]?</label>
+			<label kind="synchronisation" x="-1292" y="-229">DL[id]?</label>
 		</transition>
 		<transition>
 			<source ref="id121"/>
