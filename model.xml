@@ -14,7 +14,7 @@ const int unit = 1;    // time unit ratio wrt 1 us
 const int number_BS = 2;    // number of Base Stations
 typedef int [0, number_BS - 1] BSid_t;
 
-clock frame_clk[BSid_t];    // frame clock timer
+clock frame_clk[1];    // frame clock timer
 
 const int number_UE = 10;    // number of User Equipment
 typedef int [0, number_UE - 1] UEid_t;
@@ -91,7 +91,7 @@ const int MCS = 3;    // MCS index
 
 const int audio_quality = 48;    // kbits/s
 
-const profileId_t static_profile[UEid_t] = {0, 0, 0, 0, 0, 3, 3, 1, 1, 1};    // profiles of the UEs - can be negotiated with the BS
+const profileId_t static_profile[UEid_t] = {1, 1, 1, 1, 1, 3, 3, 1, 1, 1};    // profiles of the UEs - can be negotiated with the BS
 
 const int UL_audio_size = 41;    // UL slot audio size: audio (40B) + checksum (1B) (in Bytes)
 
@@ -399,7 +399,7 @@ broadcast chan ready[BSid_t];    // RRM signal to BS that scheduling is done
 
 broadcast chan BS_process[UEid_t];    // BS QCA signal to internally process data
 
-const int channel_switch = 244 * unit;    // frequency change latency
+const int channel_switch = 244;    // frequency change latency
 
 // VARIABLES ----------------------------------------------------------------------------------
 
@@ -606,6 +606,8 @@ int24_t sleep_time[UEid_t] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0};    // RRM (Radio Re
 
 bool sleeping[UEid_t] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
 
+int sleep_percent[UEid_t] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+
 // FUNCTIONS ----------------------------------------------------------------------------------
 
 int getChan(UEid_t id, int ch, BSid_t bs)
@@ -634,7 +636,9 @@ int getChan(UEid_t id, int ch, BSid_t bs)
 int getCh(UEid_t id, int ch)
 {
     int new;
-    BSid_t bs = getBS(id);
+    int bs = getBS(id);
+    if(bs == -1)
+        return -1;
     if(retransmission[bs])
     {
         ch_switch[id] = false;
@@ -817,17 +821,20 @@ int24_t sleep_duration;
 int24_t getSleepTime(UEid_t id)
 {
     int bs = getBS(id);
+    sleep_time[id] = 0;
     if(static_profile[id] != initial)
     {
         if(dedicatedSlot(bs, id))
         {
             if(retransmission[bs])
             {
-                sleep_time[id] = fint(frame_size[bs]/2 - frame_clk[bs] - sleep_latency - wake_up_latency);
+                //sleep_time[id] = frame_size[bs]/2 - fint(frame_clk[bs]) - sleep_latency - wake_up_latency;
+                sleep_time[id] = fint(frame_size[bs] - 5000 - sleep_latency - wake_up_latency);
                 sleep_time[id] = sleep_time[id] - 1;
             }
         }
-        sleep_time[id] = fint(frame_size[bs] - frame_clk[bs] - sleep_latency - wake_up_latency);
+        //sleep_time[id] = fint(frame_size[bs] - frame_clk[bs] - sleep_latency - wake_up_latency);
+        sleep_time[id] = fint(frame_size[bs] - 5000 - sleep_latency - wake_up_latency);
         sleep_time[id] = sleep_time[id] - 1;
     }
     else
@@ -838,15 +845,19 @@ int24_t getSleepTime(UEid_t id)
         {
             if(retransmission[bs])
             {
-                sleep_time[id] = fint(frame_size[bs]/2 - frame_clk[bs] - sleep_latency - wake_up_latency);
+                //sleep_time[id] = fint(frame_size[bs]/2 - frame_clk[bs] - sleep_latency - wake_up_latency);
+                sleep_time[id] = fint(frame_size[bs]/2 - 5000 - sleep_latency - wake_up_latency);
                 sleep_time[id] = sleep_time[id] - 1;
             }
-            sleep_time[id] = fint(frame_size[bs] - frame_clk[bs] - sleep_latency - wake_up_latency);
+            //sleep_time[id] = fint(frame_size[bs] - frame_clk[bs] - sleep_latency - wake_up_latency);
+            sleep_time[id] = fint(frame_size[bs] - 5000 - sleep_latency - wake_up_latency);
             sleep_time[id] = sleep_time[id] - 1;
         }  
     }
-    if(ch_switch[id])
+    if(ch_switch[id] &amp;&amp; sleep_time[id] != 0)
         sleep_time[id] = sleep_time[id] - channel_switch;
+
+    sleep_percent[id] = fint((sleep_time[id] * 100)/frame_size[bs]);
     return sleep_time[id];
 }</declaration>
 		<location id="id7" x="-586" y="-484" color="#ffffff">
@@ -2942,8 +2953,8 @@ bool checkChannel(int ch_id)
 			<label kind="invariant" x="-2610" y="-2907">frame_clk[bs] &lt;= RACH_start[bs]</label>
 		</location>
 		<location id="id141" x="-3238" y="-2915">
-			<name x="-3289" y="-2906">SCAN</name>
-			<label kind="invariant" x="-3357" y="-2889">x &lt;= scan_timeout</label>
+			<name x="-3255" y="-2966">SCAN</name>
+			<label kind="invariant" x="-3298" y="-2949">x &lt;= scan_timeout</label>
 		</location>
 		<location id="id142" x="-2626" y="-3094" color="#00ff00">
 			<name x="-2609" y="-3102">UL_ACK</name>
@@ -2958,19 +2969,35 @@ bool checkChannel(int ch_id)
 		</location>
 		<location id="id145" x="-3043" y="-3000">
 			<name x="-3102" y="-3051">SWITCH_CHANNEL</name>
-			<label kind="invariant" x="-3102" y="-3034">x &lt;= 0</label>
+			<label kind="invariant" x="-3102" y="-3034">x &lt;= channel_switch</label>
 		</location>
-		<branchpoint id="id146" x="-2839" y="-2779">
+		<location id="id146" x="-3459" y="-2915">
+			<urgent/>
+		</location>
+		<branchpoint id="id147" x="-2839" y="-2779">
 		</branchpoint>
-		<branchpoint id="id147" x="-3111" y="-2805">
+		<branchpoint id="id148" x="-3111" y="-2805">
 		</branchpoint>
 		<init ref="id133"/>
 		<transition>
+			<source ref="id141"/>
+			<target ref="id146"/>
+			<label kind="guard" x="-3408" y="-2915">x &gt;= scan_timeout</label>
+		</transition>
+		<transition>
+			<source ref="id148"/>
+			<target ref="id146"/>
+			<label kind="probability" x="-3340" y="-2728">100 - prob_stable</label>
+			<nail x="-3111" y="-2728"/>
+			<nail x="-3459" y="-2728"/>
+		</transition>
+		<transition>
 			<source ref="id145"/>
 			<target ref="id141"/>
-			<label kind="guard" x="-3213" y="-2958">ch == -1 &amp;&amp;
-x &gt;= 0</label>
-			<nail x="-3077" y="-2915"/>
+			<label kind="guard" x="-3162" y="-2958">ch == -1 &amp;&amp;
+x &gt;= channel_switch</label>
+			<label kind="assignment" x="-3162" y="-2915">x = 0</label>
+			<nail x="-3060" y="-2915"/>
 		</transition>
 		<transition>
 			<source ref="id144"/>
@@ -2981,7 +3008,8 @@ x &gt;= 0</label>
 			<source ref="id145"/>
 			<target ref="id137"/>
 			<label kind="guard" x="-3009" y="-3000">ch != -1 &amp;&amp;
-x &gt;= 0</label>
+x &gt;= channel_switch</label>
+			<label kind="assignment" x="-3009" y="-2966">x = 0</label>
 		</transition>
 		<transition>
 			<source ref="id144"/>
@@ -2991,7 +3019,7 @@ x &gt;= 0</label>
 			<nail x="-3043" y="-2847"/>
 		</transition>
 		<transition>
-			<source ref="id146"/>
+			<source ref="id147"/>
 			<target ref="id144"/>
 			<label kind="synchronisation" x="-2830" y="-2822">RACH[bs]!</label>
 			<label kind="assignment" x="-2830" y="-2805">RACH_id[bs] = id</label>
@@ -3031,8 +3059,7 @@ ch = getChan(id, ch, bs)</label>
 		<transition>
 			<source ref="id137"/>
 			<target ref="id139"/>
-			<label kind="guard" x="-2805" y="-2983">x &lt;= disconnect_timeout</label>
-			<label kind="synchronisation" x="-2805" y="-3000">BCH[ch]?</label>
+			<label kind="synchronisation" x="-2779" y="-3000">BCH[ch]?</label>
 		</transition>
 		<transition>
 			<source ref="id137"/>
@@ -3049,7 +3076,7 @@ x = 0, ch = -1</label>
 		</transition>
 		<transition>
 			<source ref="id138"/>
-			<target ref="id146"/>
+			<target ref="id147"/>
 			<label kind="guard" x="-2813" y="-2771">x &gt;= RACH_size[bs]/2 &amp;&amp;
 RACH_id[bs] == -1</label>
 			<label kind="assignment" x="-2813" y="-2737">x = 0</label>
@@ -3068,13 +3095,11 @@ connecting[id] = 0,
 x = 0, ch = -1</label>
 		</transition>
 		<transition>
-			<source ref="id141"/>
+			<source ref="id146"/>
 			<target ref="id135"/>
-			<label kind="guard" x="-3451" y="-3000">x &gt;= scan_timeout &amp;&amp;
-i &gt;= number_channels &amp;&amp;
+			<label kind="guard" x="-3451" y="-3000">i &gt;= number_channels &amp;&amp;
 j &lt; number_retries</label>
-			<label kind="assignment" x="-3451" y="-2941">i = 0, j++</label>
-			<nail x="-3459" y="-2915"/>
+			<label kind="assignment" x="-3451" y="-2958">i = 0, j++</label>
 			<nail x="-3459" y="-3000"/>
 		</transition>
 		<transition>
@@ -3088,14 +3113,12 @@ j = 0</label>
 			<nail x="-3298" y="-3153"/>
 		</transition>
 		<transition>
-			<source ref="id141"/>
+			<source ref="id146"/>
 			<target ref="id135"/>
-			<label kind="guard" x="-3527" y="-3077">x &gt;= scan_timeout &amp;&amp;
-i &lt; number_channels</label>
-			<label kind="assignment" x="-3527" y="-3034">i++</label>
-			<nail x="-3306" y="-2898"/>
-			<nail x="-3536" y="-2898"/>
-			<nail x="-3536" y="-3034"/>
+			<label kind="guard" x="-3493" y="-3077">i &lt; number_channels</label>
+			<label kind="assignment" x="-3493" y="-3060">i++, x = 0</label>
+			<nail x="-3493" y="-2915"/>
+			<nail x="-3493" y="-3034"/>
 			<nail x="-3349" y="-3034"/>
 		</transition>
 		<transition>
@@ -3107,7 +3130,7 @@ i &lt; number_channels</label>
 checkChannel(i)</label>
 		</transition>
 		<transition>
-			<source ref="id147"/>
+			<source ref="id148"/>
 			<target ref="id144"/>
 			<label kind="assignment" x="-3068" y="-2788">i = 0, j = 0,
 x = 0,
@@ -3117,7 +3140,7 @@ ch = getChan(id, ch, bs)</label>
 		</transition>
 		<transition>
 			<source ref="id134"/>
-			<target ref="id147"/>
+			<target ref="id148"/>
 			<label kind="guard" x="-3213" y="-2788">x &gt;= scan_lat</label>
 			<label kind="assignment" x="-3213" y="-2805">getStability()</label>
 		</transition>
@@ -3181,52 +3204,52 @@ int getUARTTime()
     //return fint((samples_ready[id] * bit_depth) / (uart_speed * 1000));
     return 10;
 }</declaration>
-		<location id="id148" x="-764" y="-654">
+		<location id="id149" x="-764" y="-654">
 			<name x="-816" y="-722">SAMPLE</name>
 			<label kind="invariant" x="-816" y="-705">x' == 1 &amp;&amp;
 x &lt;= frame_size[bs]</label>
 		</location>
-		<location id="id149" x="-765" y="-544" color="#ff00ff">
+		<location id="id150" x="-765" y="-544" color="#ff00ff">
 			<name x="-799" y="-527">PROCESS_CODEC</name>
 			<label kind="invariant" x="-799" y="-510">x &lt;= codec_latency</label>
 		</location>
-		<location id="id150" x="-1105" y="-654" color="#ffffff">
+		<location id="id151" x="-1105" y="-654" color="#ffffff">
 			<name x="-1130" y="-705">INITIAL</name>
 			<label kind="invariant" x="-1130" y="-688">x' == 0</label>
 		</location>
-		<location id="id151" x="-391" y="-544">
+		<location id="id152" x="-391" y="-544">
 			<name x="-433" y="-527">TRANSFER</name>
 			<label kind="invariant" x="-433" y="-510">x &lt;= uart_latency</label>
 			<label kind="comments" x="-433" y="-484">DSP to QCA TX</label>
 		</location>
-		<location id="id152" x="-1105" y="-544" color="#4e342e">
+		<location id="id153" x="-1105" y="-544" color="#4e342e">
 			<name x="-1165" y="-553">STOP</name>
 			<label kind="testcodeEnter">Add brown color</label>
 			<urgent/>
 		</location>
-		<init ref="id150"/>
+		<init ref="id151"/>
 		<transition>
-			<source ref="id148"/>
-			<target ref="id149"/>
+			<source ref="id149"/>
+			<target ref="id150"/>
 			<label kind="guard" x="-756" y="-620">x &gt;= frame_size[bs]</label>
 			<label kind="assignment" x="-756" y="-603">x = 0</label>
 		</transition>
 		<transition>
-			<source ref="id148"/>
-			<target ref="id152"/>
+			<source ref="id149"/>
+			<target ref="id153"/>
 			<label kind="synchronisation" x="-935" y="-569">disconnected[id]?</label>
 			<nail x="-824" y="-544"/>
 		</transition>
 		<transition>
-			<source ref="id148"/>
-			<target ref="id152"/>
+			<source ref="id149"/>
+			<target ref="id153"/>
 			<label kind="synchronisation" x="-935" y="-612">stop_sample[id]?</label>
 			<nail x="-833" y="-586"/>
 			<nail x="-1079" y="-586"/>
 		</transition>
 		<transition>
-			<source ref="id151"/>
-			<target ref="id148"/>
+			<source ref="id152"/>
+			<target ref="id149"/>
 			<label kind="guard" x="-595" y="-731">x &gt;= uart_latency</label>
 			<label kind="synchronisation" x="-595" y="-714">sample_ready[id]!</label>
 			<label kind="assignment" x="-595" y="-697">x = 0,
@@ -3234,20 +3257,20 @@ getNumberSamples()</label>
 			<nail x="-391" y="-654"/>
 		</transition>
 		<transition>
-			<source ref="id149"/>
-			<target ref="id151"/>
+			<source ref="id150"/>
+			<target ref="id152"/>
 			<label kind="guard" x="-646" y="-544">x &gt;= codec_latency</label>
 			<label kind="assignment" x="-646" y="-527">x = 0,
 uart_latency = getUARTTime()</label>
 		</transition>
 		<transition>
-			<source ref="id152"/>
-			<target ref="id150"/>
+			<source ref="id153"/>
+			<target ref="id151"/>
 			<label kind="assignment" x="-1139" y="-612">x = 0</label>
 		</transition>
 		<transition>
-			<source ref="id150"/>
-			<target ref="id148"/>
+			<source ref="id151"/>
+			<target ref="id149"/>
 			<label kind="synchronisation" x="-1003" y="-714">sample[id]?</label>
 			<label kind="assignment" x="-1003" y="-697">x = 0,
 bs = getBS(id)</label>
@@ -3312,11 +3335,11 @@ bs_2ip = InternalBSProcessing(1, 6250);
 // List one or more processes to be composed into a system.
 system bs_1, bs_1clk, bs_1s, bs_1ip,
 //bs_2, bs_2clk, bs_2s, bs_2ip,
-usr_1, usr_1sl, usr_1c, usr_1j, //usr_1s, usr_1lt, usr_1sm, usr_1ip,
-usr_2, usr_2sl, usr_2c, usr_2j, // usr_2s, usr_2lt, usr_2sm, usr_2ip,
-usr_3, usr_3sl, usr_3c, usr_3j, // usr_3s, usr_3lt, usr_3sm, usr_3ip,
-usr_4, usr_4sl, usr_4c, usr_4j, // usr_4s, usr_4lt, usr_4sm, usr_4ip,
-usr_5, usr_5sl, usr_5c, usr_5j; // usr_5s, usr_5lt, usr_5sm, usr_5ip;</system>
+usr_1, usr_1sl, usr_1c, usr_1j, usr_1lt; //usr_1s, usr_1sm, usr_1ip,
+//usr_2, usr_2sl, usr_2c, usr_2j, usr_2lt, // usr_2s, usr_2sm, usr_2ip,
+//usr_3, usr_3sl, usr_3c, usr_3j, usr_3lt, // usr_3s, usr_3sm, usr_3ip,
+//usr_4, usr_4sl, usr_4c, usr_4j, usr_4lt, // usr_4s, usr_4sm, usr_4ip,
+//usr_5, usr_5sl, usr_5c, usr_5j, usr_5lt; // usr_5s, usr_5sm, usr_5ip;</system>
 	<queries>
 		<query>
 			<formula>E&lt;&gt; ( bs_1.TRANSMIT_BCH and bs_1s.INITIAL and bs_1ip.INITIAL and bs_2.TRANSMIT_BCH and bs_2s.INITIAL and bs_2ip.INITIAL and usr_1.ON and usr_1s.INITIAL and usr_1c.INITIAL and usr_1j.INITIAL and usr_1lt.INITIAL and usr_1sm.INITIAL )</formula>
@@ -3324,6 +3347,30 @@ usr_5, usr_5sl, usr_5c, usr_5j; // usr_5s, usr_5lt, usr_5sm, usr_5ip;</system>
 		</query>
 		<query>
 			<formula>E&lt;&gt; ( bs_1.GUARD and bs_1clk.FRAME_TIME and bs_1s.INITIAL and bs_1ip.INITIAL and bs_2.GUARD and bs_2clk.FRAME_TIME and bs_2s.INITIAL and bs_2ip.INITIAL and usr_1.CONNECTING and usr_1s.INITIAL and usr_1c.TEST_CHANNEL and usr_1j.INITIAL and usr_1lt.INITIAL and usr_1sm.INITIAL )</formula>
+			<comment></comment>
+		</query>
+		<query>
+			<formula>E&lt;&gt; ( bs_1.GUARD and bs_1clk.FRAME_TIME and bs_1s.INITIAL and bs_1ip.INITIAL and usr_1.LISTEN_ONLY and usr_1sl.INITIAL and usr_1c.INITIAL and usr_1j.INITIAL and usr_2.LISTEN_ONLY and usr_2sl.INITIAL and usr_2c.INITIAL and usr_2j.INITIAL and usr_3.LISTEN_ONLY and usr_3sl.INITIAL and usr_3c.INITIAL and usr_3j.INITIAL and usr_4.LISTEN_ONLY and usr_4sl.INITIAL and usr_4c.INITIAL and usr_4j.INITIAL and usr_5.CONNECTING and usr_5sl.INITIAL and usr_5c._id146 and usr_5j.INITIAL )</formula>
+			<comment></comment>
+		</query>
+		<query>
+			<formula>E&lt;&gt; ( bs_1.GUARD and bs_1clk.FRAME_TIME and bs_1s.INITIAL and bs_1ip.INITIAL and usr_1.ON and usr_1sl.INITIAL and usr_1c.INITIAL and usr_1j.INITIAL and usr_2.CONNECTING and usr_2sl.INITIAL and usr_2c.TEST_CHANNEL and usr_2j.INITIAL and usr_3.ON and usr_3sl.INITIAL and usr_3c.INITIAL and usr_3j.INITIAL and usr_4.ON and usr_4sl.INITIAL and usr_4c.INITIAL and usr_4j.INITIAL and usr_5.ON and usr_5sl.INITIAL and usr_5c.INITIAL and usr_5j.INITIAL)</formula>
+			<comment></comment>
+		</query>
+		<query>
+			<formula>E&lt;&gt; ( bs_1.GUARD and bs_1clk.FRAME_TIME and bs_1s.INITIAL and bs_1ip.INITIAL and usr_1.CONNECTING and usr_1sl.INITIAL and usr_1c._id135 and usr_1j.INITIAL and usr_1lt.INITIAL and usr_2.CONNECTING and usr_2sl.INITIAL and usr_2c.SCAN and usr_2j.INITIAL and usr_2lt.INITIAL and usr_3.CONNECTING and usr_3sl.INITIAL and usr_3c.SWITCH_CHANNEL and usr_3j.INITIAL and usr_3lt.INITIAL and usr_4.LISTEN_ONLY and usr_4sl.INITIAL and usr_4c.INITIAL and usr_4j.INITIAL and usr_4lt.WAIT_ACK and usr_5.CONNECTING and usr_5sl.INITIAL and usr_5c._id146 and usr_5j.INITIAL and usr_5lt.INITIAL )</formula>
+			<comment></comment>
+		</query>
+		<query>
+			<formula>E&lt;&gt; (bs_1.GUARD and bs_1clk.FRAME_TIME and bs_1s.INITIAL and bs_1ip.INITIAL and usr_1.CONNECTING and usr_1sl.INITIAL and usr_1c._id146 and usr_1j.INITIAL and usr_1lt.INITIAL)</formula>
+			<comment></comment>
+		</query>
+		<query>
+			<formula>E&lt;&gt; (bs_1.GUARD and bs_1clk.FRAME_TIME and bs_1s.INITIAL and bs_1ip.INITIAL and usr_1.CONNECTING and usr_1sl.INITIAL and usr_1c._id146 and usr_1j.INITIAL and usr_1lt.INITIAL and frame_clk[0]==15000 and bs_1.x==4925 and bs_1ip.x==0 and usr_1.offset==0 and usr_1sl.x==0 and usr_1c.x==5000 and usr_1j.x==0 and usr_1j.z==0 and usr_1lt.x==0 and usr_1lt.z==0)</formula>
+			<comment></comment>
+		</query>
+		<query>
+			<formula>E&lt;&gt; (frame_clk[0]==531 and bs_1.x==399 and bs_1ip.x==0 and usr_1.offset==0 and usr_1sl.x==359 and usr_1c.x==0 and usr_1j.x==0 and usr_1j.z==0 and usr_1lt.x==19692 and usr_1lt.z==409)</formula>
 			<comment></comment>
 		</query>
 		<query>
@@ -3351,15 +3398,19 @@ usr_5, usr_5sl, usr_5c, usr_5j; // usr_5s, usr_5lt, usr_5sm, usr_5ip;</system>
 			<comment></comment>
 		</query>
 		<query>
-			<formula></formula>
+			<formula>simulate [&lt;= 90000000; 1] {sleep_percent[0]}</formula>
 			<comment></comment>
 		</query>
 		<query>
-			<formula>A[] not bs_1s.UNSCHEDULABLE</formula>
-			<comment>Frame must always be schedulable.</comment>
+			<formula>E [&lt;= 100000000; 1] (max: sleep_percent[1])</formula>
+			<comment></comment>
 		</query>
 		<query>
-			<formula>A&lt;&gt; bs_1s.RETRY</formula>
+			<formula>simulate [&lt;= 8000000; 1] {usr_2sl.x, usr_1sl.x, usr_3sl.x, usr_4sl.x}</formula>
+			<comment></comment>
+		</query>
+		<query>
+			<formula></formula>
 			<comment></comment>
 		</query>
 		<query>
