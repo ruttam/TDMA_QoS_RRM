@@ -1182,6 +1182,7 @@ void scheduleFrame()
     int i = 0;
     j = 0;
     slot_count = 2;
+    number_slots[bs] = 0;
     start_time = 0;
     transmission_duration = frame_size[bs]/2;
     
@@ -1495,7 +1496,8 @@ slot_start[bs][ue]</label>
 		<transition>
 			<source ref="id46"/>
 			<target ref="id36"/>
-			<label kind="assignment" x="-1207" y="-621">slot += 1</label>
+			<label kind="assignment" x="-1207" y="-621">slot += 1,
+x = 0</label>
 		</transition>
 		<transition>
 			<source ref="id42"/>
@@ -1752,7 +1754,7 @@ z &lt;= disconnect_timeout</label>
 			<name x="-1776" y="-2006">SWITCH_CHANNEL</name>
 			<label kind="invariant" x="-1776" y="-1989">z &lt;= channel_switch</label>
 		</location>
-		<location id="id69" x="-1792" y="-1878">
+		<location id="id69" x="-1793" y="-1878">
 			<urgent/>
 		</location>
 		<location id="id70" x="-1963" y="-1938">
@@ -1765,6 +1767,13 @@ z &lt;= disconnect_timeout</label>
 		<branchpoint id="id73" x="-1555" y="-1427">
 		</branchpoint>
 		<init ref="id50"/>
+		<transition>
+			<source ref="id60"/>
+			<target ref="id55"/>
+			<label kind="guard" x="-1929" y="-1708">x &gt; getLatency(id)</label>
+			<nail x="-1827" y="-1708"/>
+			<nail x="-1929" y="-1708"/>
+		</transition>
 		<transition>
 			<source ref="id70"/>
 			<target ref="id54"/>
@@ -1785,7 +1794,8 @@ z &lt;= disconnect_timeout</label>
 		<transition>
 			<source ref="id55"/>
 			<target ref="id60"/>
-			<label kind="assignment" x="-1929" y="-1759">ch = getCh(id, ch)</label>
+			<label kind="assignment" x="-1929" y="-1759">ch = getCh(id, ch),
+x = 0</label>
 		</transition>
 		<transition>
 			<source ref="id73"/>
@@ -1809,7 +1819,8 @@ z &lt;= disconnect_timeout</label>
 			<source ref="id65"/>
 			<target ref="id59"/>
 			<label kind="synchronisation" x="-1751" y="-1640">sleep[id]!</label>
-			<label kind="assignment" x="-1751" y="-1623">ch = getCh(id, ch)</label>
+			<label kind="assignment" x="-1751" y="-1623">ch = getCh(id, ch),
+x = 0</label>
 		</transition>
 		<transition>
 			<source ref="id63"/>
@@ -1836,6 +1847,7 @@ z &lt;= disconnect_timeout</label>
 		<transition>
 			<source ref="id60"/>
 			<target ref="id69"/>
+			<label kind="guard" x="-1785" y="-1827">x &lt; getLatency(id) - channel_switch</label>
 		</transition>
 		<transition>
 			<source ref="id71"/>
@@ -3402,7 +3414,7 @@ usr_1, usr_1sl, usr_1c, usr_1j, usr_1lt; //usr_1s, usr_1sm, usr_1ip,
 			<comment></comment>
 		</query>
 		<query>
-			<formula>E [&lt;= 100000000; 1] (max: sleep_percent[1])</formula>
+			<formula>E [&lt;= 100000000; 1] (max: sleep_percent[0])</formula>
 			<comment></comment>
 		</query>
 		<query>
