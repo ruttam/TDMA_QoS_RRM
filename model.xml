@@ -159,7 +159,7 @@ broadcast chan RACH[BSid_t];    // UE signal to BS through the random access cha
 
 broadcast chan UE_process[UEid_t];    // UE QCA signal to internally process data
 
-const int24_t disconnect_timeout = 100 * 1000 * unit;    // timeout for disconnect in us
+const int24_t disconnect_timeout = 5000 * 1000 * unit;    // timeout for disconnect in us
 
 // VARIABLES ----------------------------------------------------------------------------------
 
@@ -635,28 +635,10 @@ int getChan(UEid_t id, int ch, BSid_t bs)
 
 int getCh(UEid_t id, int ch)
 {
-    int new;
     int bs = getBS(id);
     if(bs == -1)
         return -1;
-    if(retransmission[bs])
-    {
-        ch_switch[id] = false;
-    }
-    else
-    {
-        ch_switch[id] = true;
-    }
-    new = channel[bs][0];
-    if(ch != new)
-    {
-        ch_switch[id] = true;
-    }
-    else
-    {
-        ch_switch[id] = false;
-    }
-    return new;
+    return getChan(id, ch, bs);
 }
 
 </declaration>
@@ -828,13 +810,13 @@ int24_t getSleepTime(UEid_t id)
         {
             if(retransmission[bs])
             {
-                //sleep_time[id] = frame_size[bs]/2 - fint(frame_clk[bs]) - sleep_latency - wake_up_latency;
-                sleep_time[id] = fint(frame_size[bs] - 5000 - sleep_latency - wake_up_latency);
+                sleep_time[id] = frame_size[bs]/2 - fint(frame_clk[bs]) - sleep_latency - wake_up_latency;
+                //sleep_time[id] = fint(frame_size[bs] - 5000 - sleep_latency - wake_up_latency);
                 sleep_time[id] = sleep_time[id] - 1;
             }
         }
-        //sleep_time[id] = fint(frame_size[bs] - frame_clk[bs] - sleep_latency - wake_up_latency);
-        sleep_time[id] = fint(frame_size[bs] - 5000 - sleep_latency - wake_up_latency);
+        sleep_time[id] = fint(frame_size[bs] - frame_clk[bs] - sleep_latency - wake_up_latency);
+        //sleep_time[id] = fint(frame_size[bs] - 5000 - sleep_latency - wake_up_latency);
         sleep_time[id] = sleep_time[id] - 1;
     }
     else
@@ -845,12 +827,12 @@ int24_t getSleepTime(UEid_t id)
         {
             if(retransmission[bs])
             {
-                //sleep_time[id] = fint(frame_size[bs]/2 - frame_clk[bs] - sleep_latency - wake_up_latency);
-                sleep_time[id] = fint(frame_size[bs]/2 - 5000 - sleep_latency - wake_up_latency);
+                sleep_time[id] = fint(frame_size[bs]/2 - frame_clk[bs] - sleep_latency - wake_up_latency);
+                //sleep_time[id] = fint(frame_size[bs]/2 - 5000 - sleep_latency - wake_up_latency);
                 sleep_time[id] = sleep_time[id] - 1;
             }
-            //sleep_time[id] = fint(frame_size[bs] - frame_clk[bs] - sleep_latency - wake_up_latency);
-            sleep_time[id] = fint(frame_size[bs] - 5000 - sleep_latency - wake_up_latency);
+            sleep_time[id] = fint(frame_size[bs] - frame_clk[bs] - sleep_latency - wake_up_latency);
+            //sleep_time[id] = fint(frame_size[bs] - 5000 - sleep_latency - wake_up_latency);
             sleep_time[id] = sleep_time[id] - 1;
         }  
     }
@@ -1686,7 +1668,6 @@ z' == 0</label>
 		</location>
 		<location id="id51" x="-2184" y="-1708" color="#138d75">
 			<name x="-2269" y="-1725">BCH_ACK</name>
-			<label kind="invariant" x="-2269" y="-1708">z' == 0</label>
 			<urgent/>
 		</location>
 		<location id="id52" x="-2016" y="-1427" color="#ffa500">
@@ -1698,13 +1679,13 @@ z' == 0</label>
 			<urgent/>
 		</location>
 		<location id="id54" x="-2184" y="-1878" color="#ffa500">
-			<name x="-2269" y="-1904">WAIT_BCH</name>
-			<label kind="invariant" x="-2346" y="-1887">x &lt;= getLatency(id) &amp;&amp;
+			<name x="-2295" y="-1904">WAIT_BCH</name>
+			<label kind="invariant" x="-2380" y="-1887">x &lt;= getLatency(id) &amp;&amp;
 z &lt;= disconnect_timeout</label>
 		</location>
 		<location id="id55" x="-1963" y="-1759" color="#4e342e">
-			<name x="-1980" y="-1742">FAIL</name>
-			<label kind="invariant" x="-1989" y="-1725">z' == 1</label>
+			<name x="-2014" y="-1776">FAIL</name>
+			<label kind="invariant" x="-2031" y="-1759">z' == 1</label>
 			<urgent/>
 		</location>
 		<location id="id56" x="-1963" y="-2040" color="#4e342e">
@@ -1722,6 +1703,7 @@ z &lt;= disconnect_timeout</label>
 		</location>
 		<location id="id59" x="-1794" y="-1640" color="#ca6f1e">
 			<name x="-1819" y="-1623">SLEEP</name>
+			<label kind="invariant" x="-1819" y="-1606">z' == 0</label>
 		</location>
 		<location id="id60" x="-1793" y="-1759">
 			<urgent/>
@@ -1739,6 +1721,7 @@ z &lt;= disconnect_timeout</label>
 		</location>
 		<location id="id64" x="-1555" y="-1504" color="#ffa500">
 			<name x="-1538" y="-1513">WAIT_ACK</name>
+			<label kind="invariant" x="-1538" y="-1496">z' == 0</label>
 		</location>
 		<location id="id65" x="-1649" y="-1640" color="#00ff00">
 			<name x="-1675" y="-1674">UL_ACK</name>
@@ -1768,21 +1751,22 @@ z &lt;= disconnect_timeout</label>
 		</branchpoint>
 		<init ref="id50"/>
 		<transition>
-			<source ref="id60"/>
-			<target ref="id55"/>
-			<label kind="guard" x="-1929" y="-1708">x &gt; getLatency(id)</label>
-			<nail x="-1827" y="-1708"/>
-			<nail x="-1929" y="-1708"/>
+			<source ref="id70"/>
+			<target ref="id53"/>
+			<label kind="guard" x="-1963" y="-1942">x &gt;= getLatency(id)</label>
+			<label kind="assignment" x="-1963" y="-1908">x = 0</label>
 		</transition>
 		<transition>
 			<source ref="id70"/>
 			<target ref="id54"/>
+			<label kind="guard" x="-2125" y="-1963">x &lt;= getLatency(id)</label>
+			<label kind="assignment" x="-2124" y="-1938">z = 0</label>
 			<nail x="-2142" y="-1938"/>
 		</transition>
 		<transition>
 			<source ref="id68"/>
 			<target ref="id70"/>
-			<label kind="guard" x="-1946" y="-2006">z &gt;= channel_switch</label>
+			<label kind="guard" x="-1955" y="-2006">z &gt;= channel_switch</label>
 			<nail x="-1963" y="-1989"/>
 		</transition>
 		<transition>
@@ -1847,7 +1831,6 @@ x = 0</label>
 		<transition>
 			<source ref="id60"/>
 			<target ref="id69"/>
-			<label kind="guard" x="-1785" y="-1827">x &lt; getLatency(id) - channel_switch</label>
 		</transition>
 		<transition>
 			<source ref="id71"/>
@@ -1887,7 +1870,7 @@ prob_success = getCQI(id)</label>
 		<transition>
 			<source ref="id69"/>
 			<target ref="id70"/>
-			<label kind="guard" x="-1904" y="-1963">!ch_switch[id]</label>
+			<label kind="guard" x="-1921" y="-1955">!ch_switch[id]</label>
 			<nail x="-1810" y="-1938"/>
 		</transition>
 		<transition>
@@ -1957,9 +1940,9 @@ prob_success = getCQI(id)</label>
 		<transition>
 			<source ref="id73"/>
 			<target ref="id64"/>
-			<label kind="synchronisation" x="-1546" y="-1470">UCCH[ch][id]!</label>
-			<label kind="assignment" x="-1546" y="-1453">x = 0</label>
-			<label kind="probability" x="-1546" y="-1487">prob_success</label>
+			<label kind="synchronisation" x="-1547" y="-1462">UCCH[ch][id]!</label>
+			<label kind="assignment" x="-1547" y="-1445">x = 0</label>
+			<label kind="probability" x="-1547" y="-1479">prob_success</label>
 		</transition>
 	</template>
 	<template>
@@ -3386,6 +3369,14 @@ usr_1, usr_1sl, usr_1c, usr_1j, usr_1lt; //usr_1s, usr_1sm, usr_1ip,
 			<comment></comment>
 		</query>
 		<query>
+			<formula>E&lt;&gt; (bs_1.READY and bs_1clk.FRAME_TIME and bs_1s.INITIAL and bs_1ip.INITIAL and usr_1.LISTEN_ONLY and usr_1sl.INITIAL and usr_1c.INITIAL and usr_1j.INITIAL and usr_1lt._id60)</formula>
+			<comment></comment>
+		</query>
+		<query>
+			<formula>E&lt;&gt; (usr_1lt._id60)</formula>
+			<comment></comment>
+		</query>
+		<query>
 			<formula></formula>
 			<comment></comment>
 		</query>
@@ -3410,15 +3401,19 @@ usr_1, usr_1sl, usr_1c, usr_1j, usr_1lt; //usr_1s, usr_1sm, usr_1ip,
 			<comment></comment>
 		</query>
 		<query>
-			<formula>simulate [&lt;= 90000000; 1] {sleep_percent[0]}</formula>
+			<formula>simulate [&lt;= 100000000; 1] {sleep_percent[0]}</formula>
 			<comment></comment>
 		</query>
 		<query>
-			<formula>E [&lt;= 100000000; 1] (max: sleep_percent[0])</formula>
+			<formula>E [&lt;= 100000000; 10] (max: sleep_percent[0])</formula>
 			<comment></comment>
 		</query>
 		<query>
 			<formula>simulate [&lt;= 8000000; 1] {usr_2sl.x, usr_1sl.x, usr_3sl.x, usr_4sl.x}</formula>
+			<comment></comment>
+		</query>
+		<query>
+			<formula></formula>
 			<comment></comment>
 		</query>
 		<query>
