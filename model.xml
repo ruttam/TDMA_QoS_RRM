@@ -53,7 +53,7 @@ int24_t frame_size[BSid_t] = {0, 0};
 
 int data_rate[BSid_t] = {60, 60};    // initial data transmission rate (in Mbit/s)
 
-int GI[BSid_t] = {400, 400};    // required GI size according to the MCS used (in us)
+int GI[BSid_t] = {30, 30};    // required GI size according to the MCS used (in us)
 
 int GI_size[BSid_t] = {0, 0};    // actual GI size of the current frame (in us)
 
@@ -927,9 +927,17 @@ int24_t getSleepTime(UEid_t id)
                 sleep_time[id] = fint(frame_size[bs]/2 - frame_clk[bs] - sleep_latency - wake_up_latency);
                 sleep_time[id] = sleep_time[id] - 1;
             }
+            else
+            {
+                sleep_time[id] = fint(frame_size[bs] - frame_clk[bs] - sleep_latency - wake_up_latency);
+                sleep_time[id] = sleep_time[id] - 1;
+            }
         }
-        sleep_time[id] = fint(frame_size[bs] - frame_clk[bs] - sleep_latency - wake_up_latency);
-        sleep_time[id] = sleep_time[id] - 1;
+        else
+        {
+            sleep_time[id] = fint(frame_size[bs] - frame_clk[bs] - sleep_latency - wake_up_latency);
+            sleep_time[id] = sleep_time[id] - 1;
+        }
     }
     else
     {
@@ -942,8 +950,13 @@ int24_t getSleepTime(UEid_t id)
                 sleep_time[id] = fint(frame_size[bs]/2 - frame_clk[bs] - sleep_latency - wake_up_latency);
                 sleep_time[id] = sleep_time[id] - 1;
             }
-            sleep_time[id] = fint(frame_size[bs] - frame_clk[bs] - sleep_latency - wake_up_latency);
-            sleep_time[id] = sleep_time[id] - 1;
+            else
+            {
+                sleep_time[id] = fint(frame_size[bs] - frame_clk[bs] - sleep_latency - wake_up_latency);
+                sleep_time[id] = sleep_time[id] - 1;
+            }
+            //sleep_time[id] = fint(frame_size[bs] - frame_clk[bs] - sleep_latency - wake_up_latency);
+            //sleep_time[id] = sleep_time[id] - 1;
         }  
     }
     if(ch_switch[id])
@@ -1312,13 +1325,13 @@ void processQueue(Queue_t queue, bool audio)
 
                 // UL
                 setSlot(j++, ue.id, slot_start, slot_size, 0, getMCS(ue.id), 2);
-	            slot_start += slot_size;
+	            slot_start += slot_size + GI[bs];
                 slot_count += 1;
 
                 // DL ACK
                 slot_size = getACKDuration(bs);
                 setSlot(j++, -1, slot_start, slot_size, 0, 5, 3);
-	            slot_start += slot_size;
+	            slot_start += slot_size + GI[bs];
                 slot_count += 1;
             }
 
@@ -1367,12 +1380,14 @@ void scheduleFrame()
 
     slot_size = getBCH();
     setSlot(j++, -1, slot_start, slot_size, 0, 5, 0);
-    slot_start += slot_size;
+    slot_start += slot_size + GI[bs];
 
     // RACH
     slot_size = getRACHDuration(bs);
     setSlot(j++, -1, slot_start, slot_size, 0, 5, 1);
-    slot_start += slot_size;
+    RACH_start[bs] = slot_start;
+    RACH_size[bs] = slot_size;
+    slot_start += slot_size + GI[bs];
 
     if(getActive(bs) &gt; 0)
     {
@@ -1394,6 +1409,7 @@ void scheduleFrame()
     processQueue(request_queue[bs], false);
     
     resetACKs();
+    number_slots[bs] = slot_count;
 }
 
 // --------------------------------------------------------------------------------------------
@@ -1519,8 +1535,6 @@ int slot = 0;    // slot counter during the frame execution
 
 bool success[slotID_t] = {false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false};
 
-int GI;
-
 // --------------------------------------------------------------------------------------------
 // FUNCTIONS
 // --------------------------------------------------------------------------------------------
@@ -1586,7 +1600,7 @@ void NACK()
 		</location>
 		<location id="id39" x="-722" y="-739">
 			<name x="-748" y="-789">GUARD</name>
-			<label kind="invariant" x="-748" y="-772">x &lt;= GI</label>
+			<label kind="invariant" x="-748" y="-772">x &lt;= GI[bs]</label>
 		</location>
 		<location id="id40" x="-680" y="-850">
 			<name x="-731" y="-901">SWITCH_CHANNEL</name>
@@ -1622,7 +1636,7 @@ void NACK()
 			<urgent/>
 		</location>
 		<location id="id48" x="-442" y="-740">
-			<label kind="invariant" x="-501" y="-722">x &lt;= slots[bs][0].size</label>
+			<label kind="invariant" x="-501" y="-773">x &lt;= slots[bs][0].size</label>
 		</location>
 		<location id="id49" x="-323" y="-816">
 			<name x="-306" y="-833">WAIT_BCH</name>
@@ -1637,13 +1651,13 @@ void NACK()
 		<transition>
 			<source ref="id31"/>
 			<target ref="id48"/>
-			<label kind="synchronisation" x="-416" y="-782">BCH[ch]!</label>
-			<label kind="assignment" x="-416" y="-765">x = 0</label>
+			<label kind="synchronisation" x="-408" y="-739">BCH[ch]!</label>
+			<label kind="assignment" x="-408" y="-722">x = 0</label>
 		</transition>
 		<transition>
 			<source ref="id47"/>
 			<target ref="id46"/>
-			<label kind="synchronisation" x="-1122" y="-629">DL[ue - number_UE]!</label>
+			<label kind="synchronisation" x="-1122" y="-637">DL[slots[bs][slot-1].owner]!</label>
 			<label kind="assignment" x="-1105" y="-603">x = 0</label>
 			<nail x="-1113" y="-603"/>
 		</transition>
@@ -1703,9 +1717,8 @@ frame_clk[bs] &gt;= slots[bs][slot].start</label>
 		<transition>
 			<source ref="id39"/>
 			<target ref="id41"/>
-			<label kind="guard" x="-875" y="-714">x &gt;= GI</label>
-			<label kind="assignment" x="-875" y="-697">current_slot[bs] = slot,
-GI = GI_size[bs],
+			<label kind="guard" x="-858" y="-714">x &gt;= GI[bs]</label>
+			<label kind="assignment" x="-858" y="-697">current_slot[bs] = slot,
 RACH_id[bs] = -1</label>
 		</transition>
 		<transition>
@@ -1754,14 +1767,13 @@ x = 0</label>
 		<transition>
 			<source ref="id34"/>
 			<target ref="id42"/>
-			<label kind="assignment" x="-1105" y="-348">x = 0,
-ACK[ue] = 1,
-GI = GI_size[bs] - qca_processing</label>
+			<label kind="assignment" x="-1028" y="-306">x = 0,
+ACK[ue] = 1</label>
 		</transition>
 		<transition>
 			<source ref="id36"/>
 			<target ref="id39"/>
-			<label kind="guard" x="-1011" y="-765">slot &lt; number_slots[bs]</label>
+			<label kind="guard" x="-1045" y="-765">slot &lt; number_slots[bs]</label>
 		</transition>
 		<transition>
 			<source ref="id32"/>
@@ -1786,8 +1798,7 @@ GI = GI_size[bs] - qca_processing</label>
 			<source ref="id48"/>
 			<target ref="id39"/>
 			<label kind="guard" x="-663" y="-765">x &gt;= slots[bs][0].size</label>
-			<label kind="assignment" x="-663" y="-739">GI = GI_size[bs],
-slot = 1,
+			<label kind="assignment" x="-663" y="-739">slot = 1,
 x = 0</label>
 		</transition>
 		<transition>
@@ -3127,7 +3138,7 @@ bool checkChannel(int ch_id)
 		</location>
 		<location id="id145" x="-3043" y="-3000">
 			<name x="-3102" y="-3051">SWITCH_CHANNEL</name>
-			<label kind="invariant" x="-3102" y="-3034">x &lt;= 0</label>
+			<label kind="invariant" x="-3102" y="-3034">x &lt;= channel_switch</label>
 		</location>
 		<branchpoint id="id146" x="-2839" y="-2779">
 		</branchpoint>
@@ -3138,7 +3149,7 @@ bool checkChannel(int ch_id)
 			<source ref="id145"/>
 			<target ref="id141"/>
 			<label kind="guard" x="-3213" y="-2958">ch == -1 &amp;&amp;
-x &gt;= 0</label>
+x &gt;= channel_switch</label>
 			<nail x="-3077" y="-2915"/>
 		</transition>
 		<transition>
@@ -3150,7 +3161,8 @@ x &gt;= 0</label>
 			<source ref="id145"/>
 			<target ref="id137"/>
 			<label kind="guard" x="-3009" y="-3000">ch != -1 &amp;&amp;
-x &gt;= 0</label>
+x &gt;= channel_switch</label>
+			<label kind="assignment" x="-3009" y="-2966">x = 0</label>
 		</transition>
 		<transition>
 			<source ref="id144"/>
@@ -3344,7 +3356,7 @@ void getSampleTime()
     sample_time = time_per_sample;
 }
 
-void samplesReady()
+void sampleReady()
 {
     samples_ready[id] += 1;
 }
@@ -3353,26 +3365,26 @@ int getUARTTime()
 {
     return fint(bit_depth[id]/(uart_speed[id] * 1000));
 }</declaration>
-		<location id="id148" x="-935" y="-484">
-			<name x="-1054" y="-510">SAMPLE</name>
-			<label kind="invariant" x="-1054" y="-493">x' == 1 &amp;&amp;
+		<location id="id148" x="-688" y="-637">
+			<name x="-722" y="-714">SAMPLE</name>
+			<label kind="invariant" x="-722" y="-697">x' == 1 &amp;&amp;
 x &lt;= sample_time</label>
 		</location>
-		<location id="id149" x="-936" y="-374" color="#ff00ff">
-			<name x="-1079" y="-391">PROCESS_CODEC</name>
-			<label kind="invariant" x="-1079" y="-374">x &lt;= codec_latency</label>
+		<location id="id149" x="-688" y="-527" color="#ff00ff">
+			<name x="-756" y="-510">PROCESS_CODEC</name>
+			<label kind="invariant" x="-756" y="-493">x &lt;= codec_latency</label>
 		</location>
 		<location id="id150" x="-935" y="-637" color="#ffffff">
 			<name x="-960" y="-688">INITIAL</name>
 			<label kind="invariant" x="-960" y="-671">x' == 0</label>
 		</location>
-		<location id="id151" x="-663" y="-374">
-			<name x="-688" y="-357">TRANSFER</name>
-			<label kind="invariant" x="-688" y="-340">x &lt;= uart_latency</label>
-			<label kind="comments" x="-688" y="-314">DSP to QCA TX</label>
+		<location id="id151" x="-340" y="-527">
+			<name x="-365" y="-510">TRANSFER</name>
+			<label kind="invariant" x="-365" y="-493">x &lt;= uart_latency</label>
+			<label kind="comments" x="-365" y="-467">Sample to memory</label>
 		</location>
-		<location id="id152" x="-663" y="-637" color="#4e342e">
-			<name x="-680" y="-671">STOP</name>
+		<location id="id152" x="-935" y="-527" color="#4e342e">
+			<name x="-960" y="-510">STOP</name>
 			<label kind="testcodeEnter">Add brown color</label>
 			<urgent/>
 		</location>
@@ -3380,49 +3392,48 @@ x &lt;= sample_time</label>
 		<transition>
 			<source ref="id148"/>
 			<target ref="id149"/>
-			<label kind="guard" x="-927" y="-450">x &gt;= sample_time</label>
-			<label kind="assignment" x="-927" y="-433">x = 0</label>
+			<label kind="guard" x="-680" y="-603">x &gt;= sample_time</label>
+			<label kind="assignment" x="-680" y="-586">x = 0</label>
 		</transition>
 		<transition>
 			<source ref="id148"/>
 			<target ref="id152"/>
-			<label kind="synchronisation" x="-850" y="-578">disconnected[id]?</label>
-			<nail x="-850" y="-552"/>
-			<nail x="-663" y="-552"/>
+			<label kind="synchronisation" x="-841" y="-552">disconnected[id]?</label>
+			<nail x="-756" y="-569"/>
+			<nail x="-901" y="-569"/>
 		</transition>
 		<transition>
 			<source ref="id148"/>
 			<target ref="id152"/>
-			<label kind="synchronisation" x="-850" y="-620">stop_sample[id]?</label>
-			<nail x="-850" y="-595"/>
-			<nail x="-697" y="-595"/>
+			<label kind="synchronisation" x="-901" y="-595">stop_sample[id]?</label>
+			<nail x="-731" y="-527"/>
 		</transition>
 		<transition>
 			<source ref="id151"/>
 			<target ref="id148"/>
-			<label kind="guard" x="-654" y="-476">x &gt;= uart_latency</label>
-			<label kind="synchronisation" x="-654" y="-459">sample_ready[id]!</label>
-			<label kind="assignment" x="-654" y="-442">x = 0,
-samplesReady()</label>
-			<nail x="-663" y="-484"/>
+			<label kind="guard" x="-518" y="-714">x &gt;= uart_latency</label>
+			<label kind="synchronisation" x="-518" y="-697">sample_ready[id]!</label>
+			<label kind="assignment" x="-518" y="-680">x = 0,
+sampleReady()</label>
+			<nail x="-340" y="-637"/>
 		</transition>
 		<transition>
 			<source ref="id149"/>
 			<target ref="id151"/>
-			<label kind="guard" x="-901" y="-374">x &gt;= codec_latency</label>
-			<label kind="assignment" x="-901" y="-357">x = 0,
+			<label kind="guard" x="-586" y="-527">x &gt;= codec_latency</label>
+			<label kind="assignment" x="-586" y="-510">x = 0,
 uart_latency = getUARTTime()</label>
 		</transition>
 		<transition>
 			<source ref="id152"/>
 			<target ref="id150"/>
-			<label kind="assignment" x="-816" y="-654">x = 0</label>
+			<label kind="assignment" x="-969" y="-595">x = 0</label>
 		</transition>
 		<transition>
 			<source ref="id150"/>
 			<target ref="id148"/>
-			<label kind="synchronisation" x="-1054" y="-612">sample[id]?</label>
-			<label kind="assignment" x="-1054" y="-595">x = 0,
+			<label kind="synchronisation" x="-867" y="-714">sample[id]?</label>
+			<label kind="assignment" x="-867" y="-697">x = 0,
 bs = getBS(id),
 getSampleTime()</label>
 		</transition>
