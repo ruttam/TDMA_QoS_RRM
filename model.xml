@@ -2710,8 +2710,7 @@ z = 0</label>
 		<transition>
 			<source ref="id126"/>
 			<target ref="id119"/>
-			<label kind="guard" x="-1020" y="-612">!dedicatedSlot(bs, id) &amp;&amp;
-ACK[id]</label>
+			<label kind="guard" x="-1020" y="-595">!dedicatedSlot(bs, id)</label>
 			<label kind="synchronisation" x="-1020" y="-578">sleep[id]!</label>
 			<label kind="assignment" x="-1020" y="-561">disconnect = 0,
 ch = getCh(id, ch)</label>
