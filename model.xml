@@ -2715,9 +2715,9 @@ z' == 0</label>
 			<name x="-799" y="-450">PREPARE</name>
 			<urgent/>
 		</location>
-		<location id="id112" x="-960" y="-221" color="#6c3483">
-			<name x="-1003" y="-204">TRANSMIT</name>
-			<label kind="invariant" x="-994" y="-187">z' == 1 &amp;&amp;
+		<location id="id112" x="-960" y="-204" color="#6c3483">
+			<name x="-1003" y="-187">TRANSMIT</name>
+			<label kind="invariant" x="-994" y="-170">z' == 1 &amp;&amp;
 z &lt;= slots[bs][slot].size/2</label>
 		</location>
 		<location id="id113" x="-824" y="-671" color="#138d75">
@@ -2733,9 +2733,9 @@ z &lt;= slots[bs][slot].size/2</label>
 			<name x="-986" y="-909">BCH_NACK</name>
 			<urgent/>
 		</location>
-		<location id="id116" x="-824" y="-221" color="#ffa500">
-			<name x="-807" y="-238">WAIT_SLOT</name>
-			<label kind="invariant" x="-807" y="-221">z' == 0 &amp;&amp;
+		<location id="id116" x="-824" y="-204" color="#ffa500">
+			<name x="-807" y="-221">WAIT_SLOT</name>
+			<label kind="invariant" x="-807" y="-204">z' == 0 &amp;&amp;
 frame_clk[bs] &lt;= slots[bs][slot].start</label>
 		</location>
 		<location id="id117" x="-1462" y="-969">
@@ -2765,8 +2765,8 @@ x &lt;= getLatency(id)</label>
 			<name x="-1182" y="-331">UL_NACK</name>
 			<urgent/>
 		</location>
-		<location id="id124" x="-1215" y="-221" color="#ffa500">
-			<name x="-1249" y="-255">WAIT_ACK</name>
+		<location id="id124" x="-1215" y="-204" color="#ffa500">
+			<name x="-1249" y="-238">WAIT_ACK</name>
 		</location>
 		<location id="id125" x="-1317" y="-348">
 			<urgent/>
@@ -2774,7 +2774,7 @@ x &lt;= getLatency(id)</label>
 		<location id="id126" x="-1156" y="-637">
 			<urgent/>
 		</location>
-		<location id="id127" x="-1317" y="-221">
+		<location id="id127" x="-1317" y="-204">
 			<urgent/>
 		</location>
 		<location id="id128" x="-824" y="-510">
@@ -2790,15 +2790,24 @@ x &lt;= getLatency(id)</label>
 		<location id="id131" x="-977" y="-374">
 			<name x="-1071" y="-383">TRANSFER</name>
 			<label kind="invariant" x="-1054" y="-365">z &lt;= time</label>
-			<label kind="comments" x="-1096" y="-408">Memory to QCA</label>
+			<label kind="comments" x="-1105" y="-408">Memory to QCA</label>
 		</location>
 		<branchpoint id="id132" x="-1317" y="-280">
 		</branchpoint>
 		<branchpoint id="id133" x="-824" y="-739">
 		</branchpoint>
-		<branchpoint id="id134" x="-1130" y="-221">
+		<branchpoint id="id134" x="-1130" y="-204">
 		</branchpoint>
 		<init ref="id108"/>
+		<transition>
+			<source ref="id131"/>
+			<target ref="id126"/>
+			<label kind="guard" x="-1105" y="-501">frame_clk[bs] + qca_latency &gt;=
+slots[bs][slot].start</label>
+			<nail x="-1011" y="-459"/>
+			<nail x="-1113" y="-459"/>
+			<nail x="-1113" y="-586"/>
+		</transition>
 		<transition>
 			<source ref="id111"/>
 			<target ref="id131"/>
@@ -2810,8 +2819,10 @@ getUARTTime()</label>
 		<transition>
 			<source ref="id131"/>
 			<target ref="id114"/>
-			<label kind="guard" x="-969" y="-357">z &lt;= time</label>
-			<label kind="assignment" x="-969" y="-340">z = 0</label>
+			<label kind="guard" x="-1062" y="-340">z &lt;= time &amp;&amp;
+frame_clk[bs] + qca_latency &lt;
+slots[bs][slot].start</label>
+			<label kind="assignment" x="-1062" y="-280">z = 0</label>
 			<nail x="-977" y="-323"/>
 		</transition>
 		<transition>
@@ -2833,10 +2844,12 @@ getUARTTime()</label>
 		</transition>
 		<transition>
 			<source ref="id129"/>
-			<target ref="id118"/>
-			<label kind="guard" x="-1623" y="-731">z &gt;= channel_switch</label>
-			<label kind="assignment" x="-1530" y="-714">z = 0</label>
-			<nail x="-1487" y="-782"/>
+			<target ref="id126"/>
+			<label kind="guard" x="-1623" y="-620">z &gt;= channel_switch</label>
+			<label kind="assignment" x="-1623" y="-603">z = 0,
+ch_switch[id] = 0</label>
+			<nail x="-1487" y="-586"/>
+			<nail x="-1190" y="-586"/>
 		</transition>
 		<transition>
 			<source ref="id130"/>
@@ -2864,6 +2877,7 @@ getUARTTime()</label>
 			<source ref="id126"/>
 			<target ref="id109"/>
 			<label kind="guard" x="-1130" y="-637">x &gt;= getLatency(id)</label>
+			<label kind="assignment" x="-1122" y="-620">ch = getCh(id, ch)</label>
 			<nail x="-1003" y="-637"/>
 		</transition>
 		<transition>
@@ -2873,13 +2887,14 @@ getUARTTime()</label>
 		<transition>
 			<source ref="id122"/>
 			<target ref="id121"/>
-			<label kind="synchronisation" x="-1309" y="-527">sleep[id]!</label>
-			<label kind="assignment" x="-1309" y="-510">x = 0</label>
+			<label kind="synchronisation" x="-1385" y="-510">sleep[id]!</label>
+			<label kind="assignment" x="-1360" y="-493">x = 0</label>
 		</transition>
 		<transition>
 			<source ref="id126"/>
 			<target ref="id130"/>
 			<label kind="guard" x="-1292" y="-637">x &lt; getLatency(id)</label>
+			<label kind="assignment" x="-1292" y="-620">ch = getCh(id, ch)</label>
 		</transition>
 		<transition>
 			<source ref="id125"/>
@@ -2901,12 +2916,11 @@ z = 0</label>
 		<transition>
 			<source ref="id124"/>
 			<target ref="id127"/>
-			<label kind="synchronisation" x="-1292" y="-212">DL[ch]?</label>
+			<label kind="synchronisation" x="-1292" y="-195">DL[ch]?</label>
 		</transition>
 		<transition>
 			<source ref="id123"/>
 			<target ref="id126"/>
-			<label kind="assignment" x="-1147" y="-527">ch = getCh(id, ch)</label>
 		</transition>
 		<transition>
 			<source ref="id119"/>
@@ -2916,23 +2930,23 @@ z = 0</label>
 			<source ref="id133"/>
 			<target ref="id113"/>
 			<label kind="assignment" x="-816" y="-714">slot = getSlot(bs, id)</label>
-			<label kind="probability" x="-816" y="-731">prob_success</label>
+			<label kind="probability" x="-816" y="-731">100</label>
 		</transition>
 		<transition>
 			<source ref="id128"/>
 			<target ref="id121"/>
-			<label kind="guard" x="-1020" y="-612">!dedicated[id] &amp;&amp;
+			<label kind="guard" x="-1003" y="-612">!dedicated[id] &amp;&amp;
 ACK[id]</label>
-			<label kind="synchronisation" x="-1020" y="-578">sleep[id]!</label>
-			<label kind="assignment" x="-1020" y="-561">disconnect = 0,
+			<label kind="synchronisation" x="-1003" y="-578">sleep[id]!</label>
+			<label kind="assignment" x="-1003" y="-561">disconnect = 0,
 ch = getCh(id, ch)</label>
 			<nail x="-858" y="-544"/>
 		</transition>
 		<transition>
 			<source ref="id121"/>
 			<target ref="id130"/>
-			<label kind="synchronisation" x="-1411" y="-595">wake_up[id]?</label>
-			<label kind="assignment" x="-1445" y="-578">ch = getCh(id, ch)</label>
+			<label kind="synchronisation" x="-1411" y="-586">wake_up[id]?</label>
+			<label kind="assignment" x="-1445" y="-569">ch = getCh(id, ch)</label>
 		</transition>
 		<transition>
 			<source ref="id120"/>
@@ -2957,9 +2971,9 @@ ch = getCh(id, ch)</label>
 		<transition>
 			<source ref="id116"/>
 			<target ref="id112"/>
-			<label kind="guard" x="-943" y="-263">frame_clk[bs] &gt;=
+			<label kind="guard" x="-943" y="-246">frame_clk[bs] &gt;=
 slots[bs][slot].start</label>
-			<label kind="assignment" x="-935" y="-221">z = 0</label>
+			<label kind="assignment" x="-935" y="-204">z = 0</label>
 		</transition>
 		<transition>
 			<source ref="id117"/>
@@ -2971,11 +2985,11 @@ slots[bs][slot].start</label>
 		<transition>
 			<source ref="id134"/>
 			<target ref="id124"/>
-			<label kind="synchronisation" x="-1215" y="-144">UTCH[ch][id]!</label>
-			<label kind="assignment" x="-1215" y="-127">x = 0</label>
-			<label kind="probability" x="-1215" y="-161">100</label>
-			<nail x="-1130" y="-161"/>
-			<nail x="-1215" y="-161"/>
+			<label kind="synchronisation" x="-1215" y="-127">UTCH[ch][id]!</label>
+			<label kind="assignment" x="-1215" y="-110">x = 0</label>
+			<label kind="probability" x="-1215" y="-144">100</label>
+			<nail x="-1130" y="-144"/>
+			<nail x="-1215" y="-144"/>
 		</transition>
 		<transition>
 			<source ref="id115"/>
@@ -2987,8 +3001,8 @@ x &gt;= getLatency(id)</label>
 		<transition>
 			<source ref="id112"/>
 			<target ref="id134"/>
-			<label kind="guard" x="-1113" y="-255">z &gt;= slots[bs][slot].size/2</label>
-			<label kind="assignment" x="-1113" y="-221">z = 0,
+			<label kind="guard" x="-1113" y="-238">z &gt;= slots[bs][slot].size/2</label>
+			<label kind="assignment" x="-1113" y="-204">z = 0,
 prob_success =
 getCQI(id, bs)</label>
 		</transition>
@@ -3159,20 +3173,6 @@ int requestStart()
 		</branchpoint>
 		<init ref="id135"/>
 		<transition>
-			<source ref="id149"/>
-			<target ref="id146"/>
-			<label kind="probability" x="-2949" y="-2779">0</label>
-			<nail x="-2881" y="-2779"/>
-			<nail x="-2881" y="-2813"/>
-		</transition>
-		<transition>
-			<source ref="id150"/>
-			<target ref="id148"/>
-			<label kind="probability" x="-3349" y="-2745">0</label>
-			<nail x="-3111" y="-2720"/>
-			<nail x="-3451" y="-2720"/>
-		</transition>
-		<transition>
 			<source ref="id143"/>
 			<target ref="id148"/>
 			<label kind="guard" x="-3408" y="-2915">x &gt;= scan_timeout</label>
@@ -3189,6 +3189,7 @@ x &gt;= channel_switch</label>
 			<source ref="id146"/>
 			<target ref="id139"/>
 			<label kind="guard" x="-2932" y="-2932">!ch_switch[id]</label>
+			<label kind="assignment" x="-2881" y="-2915">x = 0</label>
 		</transition>
 		<transition>
 			<source ref="id147"/>
@@ -3265,7 +3266,6 @@ x = 0, ch = -1</label>
 			<target ref="id149"/>
 			<label kind="guard" x="-2796" y="-2779">x &gt;= start &amp;&amp;
 RACH_id[bs] == -1</label>
-			<label kind="assignment" x="-2796" y="-2745">x = 0</label>
 		</transition>
 		<transition>
 			<source ref="id141"/>
@@ -3322,7 +3322,7 @@ checkChannel(i)</label>
 x = 0,
 ch = getChan(id, ch, bs)</label>
 			<label kind="probability" x="-3068" y="-2805">100</label>
-			<nail x="-2924" y="-2805"/>
+			<nail x="-2873" y="-2805"/>
 		</transition>
 		<transition>
 			<source ref="id136"/>
@@ -3526,11 +3526,11 @@ bs_2ip = InternalBSProcessing(1);
 // List one or more processes to be composed into a system.
 system bs_1, bs_1clk, bs_1s, bs_1ip,
 //bs_2, bs_2clk, bs_2s, bs_2ip,
-usr_1, usr_1sl, usr_1c, usr_1j, usr_1lt, usr_1s, usr_1sm, usr_1ip;
-//usr_2, usr_2sl, usr_2c, usr_2j, usr_2lt, // usr_2s, usr_2sm, usr_2ip,
-//usr_3, usr_3sl, usr_3c, usr_3j, usr_3lt, // usr_3s, usr_3sm, usr_3ip,
-//usr_4, usr_4sl, usr_4c, usr_4j, usr_4lt; // usr_4s, usr_4sm, usr_4ip,
-//usr_5, usr_5sl, usr_5c, usr_5j, usr_5lt; // usr_5s, usr_5sm, usr_5ip;</system>
+usr_1, usr_1sl, usr_1c, usr_1j, usr_1lt, usr_1s, usr_1sm, usr_1ip,
+usr_2, usr_2sl, usr_2c, usr_2j, usr_2lt, usr_2s, usr_2sm, usr_2ip,
+usr_3, usr_3sl, usr_3c, usr_3j, usr_3lt, usr_3s, usr_3sm, usr_3ip,
+usr_4, usr_4sl, usr_4c, usr_4j, usr_4lt, usr_4s, usr_4sm, usr_4ip,
+usr_5, usr_5sl, usr_5c, usr_5j, usr_5lt, usr_5s, usr_5sm, usr_5ip;</system>
 	<queries>
 		<query>
 			<formula>E&lt;&gt; ( bs_1.TRANSMIT_BCH and bs_1s.INITIAL and bs_1ip.INITIAL and bs_2.TRANSMIT_BCH and bs_2s.INITIAL and bs_2ip.INITIAL and usr_1.ON and usr_1s.INITIAL and usr_1c.INITIAL and usr_1j.INITIAL and usr_1lt.INITIAL and usr_1sm.INITIAL )</formula>
@@ -3553,7 +3553,7 @@ usr_1, usr_1sl, usr_1c, usr_1j, usr_1lt, usr_1s, usr_1sm, usr_1ip;
 			<comment></comment>
 		</query>
 		<query>
-			<formula>simulate [&lt;= 800000; 1] {bs_2s.RETRY, frame_clk[0]}</formula>
+			<formula>simulate [&lt;= 2000000000; 5] {sleep_percent[0]}</formula>
 			<comment></comment>
 		</query>
 		<query>
@@ -3569,11 +3569,11 @@ usr_1, usr_1sl, usr_1c, usr_1j, usr_1lt, usr_1s, usr_1sm, usr_1ip;
 			<comment></comment>
 		</query>
 		<query>
-			<formula>E [&lt;= 2000000000; 1] (max: sleep_time[0])</formula>
+			<formula>E [&lt;= 200000; 1] (max: sleep_time[0])</formula>
 			<comment></comment>
 		</query>
 		<query>
-			<formula>E [&lt;=1000000000; 50] (max: sleep_percent[0])</formula>
+			<formula>E [&lt;= 100000; 1] (max: sum(i: UEid_t) sleep_percent[i])</formula>
 			<comment></comment>
 		</query>
 		<query>
