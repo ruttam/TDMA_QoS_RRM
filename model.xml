@@ -123,7 +123,7 @@ slot_t slots[BSid_t][slotID_t] = {
 
 // CONSTANTS ----------------------------------------------------------------------------------
 
-const profileId_t static_profile[UEid_t] = {3, 3, 3, 3, 3, 3, 1, 1, 1, 1};    // profiles of the UEs - can be negotiated with the BS
+const profileId_t static_profile[UEid_t] = {3, 1, 1, 1, 1, 1, 1, 1, 1, 1};    // profiles of the UEs - can be negotiated with the BS
 
 const int UL_audio_size = 41;    // UL slot audio size: audio (40B) + checksum (1B) (in Bytes)
 
@@ -312,6 +312,7 @@ int findPosition(Node_t value, Queue_t q)
     int low = q.front;
     int high = q.rear;
     int i;
+    int result;
     bool found = false;
 
     if (isEmpty(q)) {
@@ -321,15 +322,18 @@ int findPosition(Node_t value, Queue_t q)
     for (i = (q.front + 1) % number_UE; i != (q.rear + 1) % number_UE; increment(i))
     {   
         if (q.queue[i].prior &gt; value.prior &amp;&amp; !found)
+        {
             found = true;
+            result = i;
+        }
     }
-    return i;
+    return result;
 }
 
 int insert(Node_t value, Queue_t &amp;q)    // add a node according to its priority
 {
     int i = 0;
-    int j, k;
+    int j, k, l;
     bool done = false;
 
     if(!isFull(q)){
@@ -350,9 +354,9 @@ int insert(Node_t value, Queue_t &amp;q)    // add a node according to its prior
                 j += number_UE; j %= number_UE;
                 k += number_UE; k %= number_UE;
             }
-            for(k; k != i; k--)
+            for(l = k; l != i; l--)
             {
-                q.queue[k] = q.queue[j];
+                q.queue[l] = q.queue[j];
                 k--;
                 k += number_UE; k %= number_UE;
                 j--;
@@ -582,16 +586,17 @@ int getULMetaDuration(BSid_t bs)    // in us
 }
 
 int audio_size;
-int getULAudioData(BSid_t bs)
+int getULAudioData(UEid_t id)
 {
-    // return UL_audio_size * 8;
-    audio_size = (audio_quality[3]/1000) * frame_size[bs] + getULMetaData();
+    BSid_t bs = getBS(id);
+    audio_size = (audio_quality[static_profile[id]]/1000) * frame_size[bs] + getULMetaData();
     return audio_size;
 }
 
-int getULAudioDuration(BSid_t bs)    // in us
+int getULAudioDuration(UEid_t id)    // in us
 {
-    return getULAudioData(bs)/data_rate[bs];
+    BSid_t bs = getBS(id);
+    return getULAudioData(id)/data_rate[bs];
 }
 
 int getACKDuration(BSid_t bs)
@@ -851,6 +856,7 @@ int uart_latency;
 
 int getAESTime()
 {
+    int bs = getBS(id);
     return getULAudioData(id)/(AES_bit_clock/1000);
 }
 
@@ -865,9 +871,7 @@ int getDataType()
 
 int getUARTTime()
 {
-
-    int bs = getBS(id);
-    return getULAudioData(bs)/(uart_speed[id]/1000);
+    return getULAudioData(id)/(uart_speed[id]/1000);
 }
 
 // --------------------------------------------------------------------------------------------
@@ -3164,7 +3168,7 @@ int requestStart()
 			<label kind="invariant" x="-3102" y="-3034">x &lt;= channel_switch</label>
 		</location>
 		<location id="id148" x="-3451" y="-2915">
-			<name x="-3461" y="-2949">one</name>
+			<name x="-3468" y="-2898">one</name>
 			<urgent/>
 		</location>
 		<branchpoint id="id149" x="-2839" y="-2779">
@@ -3180,7 +3184,7 @@ int requestStart()
 		<transition>
 			<source ref="id147"/>
 			<target ref="id143"/>
-			<label kind="guard" x="-3213" y="-2958">ch == -1 &amp;&amp;
+			<label kind="guard" x="-3213" y="-2949">ch == -1 &amp;&amp;
 x &gt;= channel_switch</label>
 			<label kind="assignment" x="-3213" y="-2915">x = 0</label>
 			<nail x="-3077" y="-2915"/>
@@ -3225,7 +3229,8 @@ x &gt;= channel_switch</label>
 		<transition>
 			<source ref="id137"/>
 			<target ref="id147"/>
-			<label kind="assignment" x="-3170" y="-3000">x = 0</label>
+			<label kind="guard" x="-3213" y="-3000">j &lt; number_retries</label>
+			<label kind="assignment" x="-3213" y="-2983">x = 0</label>
 		</transition>
 		<transition>
 			<source ref="id140"/>
@@ -3527,10 +3532,10 @@ bs_2ip = InternalBSProcessing(1);
 system bs_1, bs_1clk, bs_1s, bs_1ip,
 //bs_2, bs_2clk, bs_2s, bs_2ip,
 usr_1, usr_1sl, usr_1c, usr_1j, usr_1lt, usr_1s, usr_1sm, usr_1ip,
-usr_2, usr_2sl, usr_2c, usr_2j, usr_2lt, usr_2s, usr_2sm, usr_2ip,
-usr_3, usr_3sl, usr_3c, usr_3j, usr_3lt, usr_3s, usr_3sm, usr_3ip,
-usr_4, usr_4sl, usr_4c, usr_4j, usr_4lt, usr_4s, usr_4sm, usr_4ip,
-usr_5, usr_5sl, usr_5c, usr_5j, usr_5lt, usr_5s, usr_5sm, usr_5ip;</system>
+usr_2, usr_2sl, usr_2c, usr_2j, usr_2lt, usr_2s, usr_2sm, usr_2ip;
+//usr_3, usr_3sl, usr_3c, usr_3j, usr_3lt, usr_3s, usr_3sm, usr_3ip,
+//usr_4, usr_4sl, usr_4c, usr_4j, usr_4lt, usr_4s, usr_4sm, usr_4ip,
+//usr_5, usr_5sl, usr_5c, usr_5j, usr_5lt, usr_5s, usr_5sm, usr_5ip;</system>
 	<queries>
 		<query>
 			<formula>E&lt;&gt; ( bs_1.TRANSMIT_BCH and bs_1s.INITIAL and bs_1ip.INITIAL and bs_2.TRANSMIT_BCH and bs_2s.INITIAL and bs_2ip.INITIAL and usr_1.ON and usr_1s.INITIAL and usr_1c.INITIAL and usr_1j.INITIAL and usr_1lt.INITIAL and usr_1sm.INITIAL )</formula>
@@ -3553,7 +3558,7 @@ usr_5, usr_5sl, usr_5c, usr_5j, usr_5lt, usr_5s, usr_5sm, usr_5ip;</system>
 			<comment></comment>
 		</query>
 		<query>
-			<formula>simulate [&lt;= 2000000000; 5] {sleep_percent[0]}</formula>
+			<formula>simulate [&lt;= 20000000; 10] {sleep_time[0]}</formula>
 			<comment></comment>
 		</query>
 		<query>
@@ -3569,11 +3574,11 @@ usr_5, usr_5sl, usr_5c, usr_5j, usr_5lt, usr_5s, usr_5sm, usr_5ip;</system>
 			<comment></comment>
 		</query>
 		<query>
-			<formula>E [&lt;= 200000; 1] (max: sleep_time[0])</formula>
+			<formula>E [&lt;= 20000000; 1] (max: sleep_time[0])</formula>
 			<comment></comment>
 		</query>
 		<query>
-			<formula>E [&lt;= 100000; 1] (max: sum(i: UEid_t) sleep_percent[i])</formula>
+			<formula>E [&lt;= 1000000; 1] (max: sum(i: UEid_t) sleep_percent[i])</formula>
 			<comment></comment>
 		</query>
 		<query>
