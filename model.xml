@@ -123,7 +123,7 @@ slot_t slots[BSid_t][slotID_t] = {
 
 // CONSTANTS ----------------------------------------------------------------------------------
 
-const profileId_t static_profile[UEid_t] = {3, 1, 1, 1, 1, 1, 1, 1, 1, 1};    // profiles of the UEs - can be negotiated with the BS
+const profileId_t static_profile[UEid_t] = {3, 4, 4, 4, 3, 3, 1, 1, 1, 1};    // profiles of the UEs - can be negotiated with the BS
 
 const int UL_audio_size = 41;    // UL slot audio size: audio (40B) + checksum (1B) (in Bytes)
 
@@ -308,12 +308,10 @@ void increment(int &amp;i)
 }
 
 int findPosition(Node_t value, Queue_t q)
-{
-    int low = q.front;
-    int high = q.rear;
-    int i;
-    int result;
+{    
     bool found = false;
+    int result;
+    int i;
 
     if (isEmpty(q)) {
         return (q.rear + 1) % number_UE;
@@ -321,12 +319,14 @@ int findPosition(Node_t value, Queue_t q)
 
     for (i = (q.front + 1) % number_UE; i != (q.rear + 1) % number_UE; increment(i))
     {   
-        if (q.queue[i].prior &gt; value.prior &amp;&amp; !found)
+        if (value.prior &lt; q.queue[i].prior &amp;&amp; !found)
         {
             found = true;
             result = i;
         }
     }
+    if(!found)
+        return i;
     return result;
 }
 
@@ -354,9 +354,9 @@ int insert(Node_t value, Queue_t &amp;q)    // add a node according to its prior
                 j += number_UE; j %= number_UE;
                 k += number_UE; k %= number_UE;
             }
-            for(l = k; l != i; l--)
+            while(k != i)
             {
-                q.queue[l] = q.queue[j];
+                q.queue[k] = q.queue[j];
                 k--;
                 k += number_UE; k %= number_UE;
                 j--;
@@ -1301,9 +1301,9 @@ void processQueue(Queue_t queue, bool audio)
             if(!sleeping[ue.id])
             {
 	            if(audio)
-	                duration = getULAudioDuration(bs);
+	                duration = getULAudioDuration(ue.id);
     	        else
-	                duration = getULMetaDuration(bs);
+	                duration = getULMetaDuration(ue.id);
 
     	        temp_GI = ((transmission_duration - (BCH_duration[bs] + (UL_duration + duration) + ACK_duration + RACH_size[bs] + channel_switch/2))/(slot_count + 1)) - 5;
 	            // verify GI size
@@ -1377,7 +1377,7 @@ void scheduleFrame()
     slot_start += slot_size;
 
     ACK_duration = getACKDuration(bs);
-    GI_size[bs] = ((transmission_duration - (slots[bs][0].size + UL_duration + ACK_duration + RACH_size[bs] + channel_switch/2))/(slot_count - 1)) - 5;
+    GI_size[bs] = ((transmission_duration - (slots[bs][0].size + ACK_duration + RACH_size[bs] + channel_switch/2))/(slot_count - 1)) - 5;
     
     // verify GI size
     if(!verifyGI(GI_size[bs]))
@@ -1564,8 +1564,8 @@ void getSwitchTime()
 			<name x="-943" y="-1079">INITIAL</name>
 			<urgent/>
 		</location>
-		<location id="id32" x="-365" y="-909">
-			<name x="-348" y="-926">READY</name>
+		<location id="id32" x="-365" y="-892">
+			<name x="-348" y="-909">READY</name>
 		</location>
 		<location id="id33" x="-365" y="-740" color="#6c3483">
 			<name x="-348" y="-757">TRANSMIT_BCH</name>
@@ -1575,7 +1575,7 @@ void getSwitchTime()
 			<name x="-705" y="-501">WAIT_UL</name>
 			<label kind="invariant" x="-705" y="-484">x &lt;= slots[bs][slot].size</label>
 		</location>
-		<location id="id35" x="-918" y="-850">
+		<location id="id35" x="-918" y="-875">
 			<urgent/>
 		</location>
 		<location id="id36" x="-884" y="-306" color="#00ff00">
@@ -1594,29 +1594,29 @@ void getSwitchTime()
 			<name x="-1045" y="-977">TRANSMISSION</name>
 			<urgent/>
 		</location>
-		<location id="id40" x="-578" y="-850" color="#ffff00">
-			<name x="-560" y="-875">RETRANSMISSION</name>
+		<location id="id40" x="-578" y="-875" color="#ffff00">
+			<name x="-603" y="-858">RETRANSMISSION</name>
 			<urgent/>
 		</location>
 		<location id="id41" x="-722" y="-740">
 			<name x="-748" y="-790">GUARD</name>
 			<label kind="invariant" x="-748" y="-773">x &lt;= GI</label>
 		</location>
-		<location id="id42" x="-756" y="-850">
-			<name x="-807" y="-901">SWITCH_CHANNEL</name>
-			<label kind="invariant" x="-807" y="-884">x &lt;= switch_delay</label>
+		<location id="id42" x="-756" y="-875">
+			<name x="-807" y="-926">SWITCH_CHANNEL</name>
+			<label kind="invariant" x="-807" y="-909">x &lt;= switch_delay</label>
 		</location>
 		<location id="id43" x="-722" y="-612" color="#ffa500">
 			<name x="-705" y="-629">WAIT_SLOT</name>
 			<label kind="invariant" x="-705" y="-612">frame_clk[bs] &lt;= slots[bs][slot].start</label>
 		</location>
 		<location id="id44" x="-1139" y="-306" color="#ff00ff">
-			<name x="-1190" y="-289">PROCESS_QCA</name>
-			<label kind="invariant" x="-1207" y="-272">x &lt;= qca_processing</label>
-			<label kind="comments" x="-1173" y="-246">Meta data</label>
+			<name x="-1181" y="-289">PROCESS_QCA</name>
+			<label kind="invariant" x="-1181" y="-272">x &lt;= qca_processing</label>
+			<label kind="comments" x="-1181" y="-246">Meta data</label>
 		</location>
 		<location id="id45" x="-1224" y="-468" color="#ff00ff">
-			<name x="-1300" y="-502">PROCESS_INTERNAL</name>
+			<name x="-1317" y="-501">PROCESS_INTERNAL</name>
 			<label kind="comments" x="-1317" y="-527">DLC user data and audio</label>
 			<urgent/>
 		</location>
@@ -1646,9 +1646,16 @@ void getSwitchTime()
 			<urgent/>
 		</location>
 		<location id="id53" x="-1385" y="-382">
-			<name x="-1411" y="-416">FAILED</name>
+			<name x="-1411" y="-365">FAILED</name>
+			<urgent/>
 		</location>
 		<init ref="id31"/>
+		<transition>
+			<source ref="id53"/>
+			<target ref="id48"/>
+			<nail x="-1385" y="-442"/>
+			<nail x="-1181" y="-442"/>
+		</transition>
 		<transition>
 			<source ref="id52"/>
 			<target ref="id53"/>
@@ -1657,7 +1664,7 @@ void getSwitchTime()
 		<transition>
 			<source ref="id52"/>
 			<target ref="id45"/>
-			<label kind="guard" x="-1351" y="-433">BS_processing[bs]</label>
+			<label kind="guard" x="-1343" y="-433">BS_processing[bs]</label>
 		</transition>
 		<transition>
 			<source ref="id36"/>
@@ -1713,7 +1720,7 @@ profile[ue] == 0</label>
 		<transition>
 			<source ref="id46"/>
 			<target ref="id32"/>
-			<label kind="synchronisation" x="-357" y="-952">ready[bs]?</label>
+			<label kind="synchronisation" x="-357" y="-943">ready[bs]?</label>
 		</transition>
 		<transition>
 			<source ref="id45"/>
@@ -1722,9 +1729,9 @@ profile[ue] == 0</label>
 		<transition>
 			<source ref="id44"/>
 			<target ref="id52"/>
-			<label kind="guard" x="-1385" y="-340">x &gt;= qca_processing &amp;&amp;
+			<label kind="guard" x="-1385" y="-323">x &gt;= qca_processing &amp;&amp;
 profile[ue] != 0</label>
-			<label kind="synchronisation" x="-1385" y="-306">BS_process[bs]!</label>
+			<label kind="synchronisation" x="-1385" y="-289">BS_process[bs]!</label>
 			<nail x="-1224" y="-306"/>
 		</transition>
 		<transition>
@@ -1738,8 +1745,8 @@ ue = slots[bs][slot].owner</label>
 		<transition>
 			<source ref="id42"/>
 			<target ref="id40"/>
-			<label kind="guard" x="-739" y="-850">x &gt;= switch_delay</label>
-			<label kind="assignment" x="-739" y="-833">x = 0</label>
+			<label kind="guard" x="-731" y="-875">x &gt;= switch_delay</label>
+			<label kind="assignment" x="-731" y="-858">x = 0</label>
 		</transition>
 		<transition>
 			<source ref="id41"/>
@@ -1756,19 +1763,20 @@ GI = GI_size[bs]</label>
 		<transition>
 			<source ref="id47"/>
 			<target ref="id46"/>
-			<label kind="synchronisation" x="-518" y="-960">schedule[bs]!</label>
-			<label kind="assignment" x="-629" y="-943">retransmission[bs] = !retransmission[bs]</label>
+			<label kind="synchronisation" x="-535" y="-960">schedule[bs]!</label>
+			<label kind="assignment" x="-535" y="-943">retransmission[bs] =
+!retransmission[bs]</label>
 		</transition>
 		<transition>
 			<source ref="id35"/>
 			<target ref="id42"/>
-			<label kind="guard" x="-901" y="-833">!retransmission[bs]</label>
-			<label kind="assignment" x="-900" y="-850">getSwitchTime()</label>
+			<label kind="guard" x="-892" y="-858">!retransmission[bs]</label>
+			<label kind="assignment" x="-892" y="-875">getSwitchTime()</label>
 		</transition>
 		<transition>
 			<source ref="id35"/>
 			<target ref="id39"/>
-			<label kind="guard" x="-1045" y="-918">retransmission[bs]</label>
+			<label kind="guard" x="-1045" y="-926">retransmission[bs]</label>
 		</transition>
 		<transition>
 			<source ref="id41"/>
@@ -1836,8 +1844,8 @@ x = 0</label>
 		<transition>
 			<source ref="id32"/>
 			<target ref="id51"/>
-			<label kind="synchronisation" x="-357" y="-892">frame_start[bs]?</label>
-			<label kind="assignment" x="-357" y="-875">x = 0</label>
+			<label kind="synchronisation" x="-357" y="-875">frame_start[bs]?</label>
+			<label kind="assignment" x="-357" y="-858">x = 0</label>
 		</transition>
 		<transition>
 			<source ref="id31"/>
@@ -3518,6 +3526,15 @@ usr_5sm = UserSample(4);
 usr_5sl = UserSleep(4);
 usr_5ip = InternalUEProcessing(4);
 
+usr_6 = UserStates(5);
+usr_6c = UserConnect(5);
+usr_6j = UserJoined(5);
+usr_6lt = UserListenOnly(5);
+usr_6s = UserStream(5);
+usr_6sm = UserSample(5);
+usr_6sl = UserSleep(5);
+usr_6ip = InternalUEProcessing(5);
+
 bs_1 = BaseStation(0);
 bs_1clk = FrameClock(0);
 bs_1s = Scheduler(0);
@@ -3529,13 +3546,15 @@ bs_2s = Scheduler(1);
 bs_2ip = InternalBSProcessing(1);
 
 // List one or more processes to be composed into a system.
-system bs_1, bs_1clk, bs_1s, bs_1ip,
+system bs_1, usr_1s, usr_2lt,
+bs_1clk, bs_1s, bs_1ip,
 //bs_2, bs_2clk, bs_2s, bs_2ip,
-usr_1, usr_1sl, usr_1c, usr_1j, usr_1lt, usr_1s, usr_1sm, usr_1ip,
-usr_2, usr_2sl, usr_2c, usr_2j, usr_2lt, usr_2s, usr_2sm, usr_2ip;
-//usr_3, usr_3sl, usr_3c, usr_3j, usr_3lt, usr_3s, usr_3sm, usr_3ip,
-//usr_4, usr_4sl, usr_4c, usr_4j, usr_4lt, usr_4s, usr_4sm, usr_4ip,
-//usr_5, usr_5sl, usr_5c, usr_5j, usr_5lt, usr_5s, usr_5sm, usr_5ip;</system>
+usr_1, usr_1sl, usr_1c, usr_1j, usr_1lt, usr_1sm, usr_1ip,
+usr_2, usr_2sl, usr_2c, usr_2j, usr_2s, usr_2sm, usr_2ip,
+usr_3, usr_3sl, usr_3c, usr_3j, usr_3lt, usr_3s, usr_3sm, usr_3ip,
+usr_4, usr_4sl, usr_4c, usr_4j, usr_4lt, usr_4s, usr_4sm, usr_4ip,
+usr_5, usr_5sl, usr_5c, usr_5j, usr_5lt, usr_5s, usr_5sm, usr_5ip,
+usr_6, usr_6sl, usr_6c, usr_6j, usr_6lt, usr_6s, usr_6sm, usr_6ip;</system>
 	<queries>
 		<query>
 			<formula>E&lt;&gt; ( bs_1.TRANSMIT_BCH and bs_1s.INITIAL and bs_1ip.INITIAL and bs_2.TRANSMIT_BCH and bs_2s.INITIAL and bs_2ip.INITIAL and usr_1.ON and usr_1s.INITIAL and usr_1c.INITIAL and usr_1j.INITIAL and usr_1lt.INITIAL and usr_1sm.INITIAL )</formula>
