@@ -18,13 +18,13 @@ clock frame_clk[BSid_t];    // frame clock timer
 
 clock location_clk;    // UE location shift timer
 
-const int number_UE = 10;    // number of User Equipment
+const int number_UE = 20;    // number of User Equipment
 typedef int [0, number_UE - 1] UEid_t;
 
 const int number_profiles = 5;    // number of UE profiles
 typedef int [0, number_profiles - 1] profileId_t;
 
-const int number_MCS = 8;    // 
+const int number_MCS = 8;    // number of MCS applicable for one stream (one antenna) devices
 
 const profileId_t initial = 0;        // Initial connected mode
 const profileId_t Listen_Only = 1;    // Listen-Only
@@ -33,27 +33,26 @@ const profileId_t RTa = 3;            // Real-Time Audio
 const profileId_t HqRTa = 4;          // High-Quality Real-Time Audio
 
 typedef int[-(1&lt;&lt;23),(1&lt;&lt;23)-1] int24_t;
+
 const int latency[profileId_t] = {-1, 2500, 70, 40, 20};    // latency requirements of each type of profiles
 
 const int audio_quality[profileId_t] = {-1, 32, 32, 48, 192};    // audio quality requirements (in kbits/s) of each type of profiles
 
 const int UL_header_size = 14;    // UL header size (in Bytes)
 
-const int DL_header_size = 21;    // DL header size (in Bytes)
+const int DL_header_size = 24;    // DL header size (in Bytes)
 
 const int UL_meta_size = 19;    // UL meta data bits (reserved for and shared between DLC and MAC data) (in Bytes)
 
 const int DL_meta_size = 30;    // DL meta data bits (reserved for and shared between DLC and MAC data) (in Bytes)
 
+// slot data types
 const int rach = 1;
-
 const int dl = 3;
 
 // GLOBAL VARIABLES ---------------------------------------------------------------------------
 
-profileId_t profile[UEid_t] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0};    // current profiles of the UEs
-
-// int MCS[UEid_t] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0};    // MCS index for every UE
+profileId_t profile[UEid_t] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};    // current profiles of the UEs
 
 int channel_bandwidth[BSid_t] = {40, 40};    // MHz
 
@@ -86,15 +85,15 @@ MCS_t MCS[number_MCS] = {
 };
 
 typedef struct {
-    int owner;
-    int start;
-    int size;
-    int data;
-    int MCS;
+    int owner;   // UE id
+    int start;   // slot start in the frame in time units
+    int size;    // slot size in time units
+    int data;    // data size in bits
+    int MCS;     // UL transmission MCS
     int type;    // 0 - BCH, 1 - RACH, 2 - UL, 3 - ACK
 } slot_t;
 
-typedef int [0, number_UE * 2 + 1] slotID_t;
+typedef int [0, number_UE + 2] slotID_t;
 
 slot_t slots[BSid_t][slotID_t] = {
     {{-1, -1, -1, -1, -1, -1}, {-1, -1, -1, -1, -1, -1}, {-1, -1, -1, -1, -1, -1},
@@ -104,7 +103,7 @@ slot_t slots[BSid_t][slotID_t] = {
      {-1, -1, -1, -1, -1, -1}, {-1, -1, -1, -1, -1, -1}, {-1, -1, -1, -1, -1, -1},
      {-1, -1, -1, -1, -1, -1}, {-1, -1, -1, -1, -1, -1}, {-1, -1, -1, -1, -1, -1},
      {-1, -1, -1, -1, -1, -1}, {-1, -1, -1, -1, -1, -1}, {-1, -1, -1, -1, -1, -1},
-     {-1, -1, -1, -1, -1, -1}},
+     {-1, -1, -1, -1, -1, -1}, {-1, -1, -1, -1, -1, -1}},
     {{-1, -1, -1, -1, -1, -1}, {-1, -1, -1, -1, -1, -1}, {-1, -1, -1, -1, -1, -1},
      {-1, -1, -1, -1, -1, -1}, {-1, -1, -1, -1, -1, -1}, {-1, -1, -1, -1, -1, -1},
      {-1, -1, -1, -1, -1, -1}, {-1, -1, -1, -1, -1, -1}, {-1, -1, -1, -1, -1, -1},
@@ -112,7 +111,7 @@ slot_t slots[BSid_t][slotID_t] = {
      {-1, -1, -1, -1, -1, -1}, {-1, -1, -1, -1, -1, -1}, {-1, -1, -1, -1, -1, -1},
      {-1, -1, -1, -1, -1, -1}, {-1, -1, -1, -1, -1, -1}, {-1, -1, -1, -1, -1, -1},
      {-1, -1, -1, -1, -1, -1}, {-1, -1, -1, -1, -1, -1}, {-1, -1, -1, -1, -1, -1},
-     {-1, -1, -1, -1, -1, -1}}
+     {-1, -1, -1, -1, -1, -1}, {-1, -1, -1, -1, -1, -1}}
 };
 
 // --------------------------------------------------------------------------------------------
@@ -123,9 +122,13 @@ slot_t slots[BSid_t][slotID_t] = {
 
 // CONSTANTS ----------------------------------------------------------------------------------
 
-const profileId_t static_profile[UEid_t] = {3, 4, 4, 4, 3, 3, 1, 1, 1, 1};    // profiles of the UEs - can be negotiated with the BS
+const profileId_t static_profile[UEid_t] = {3, 4, 4, 4, 3, 3, 1, 1, 1, 1, 3, 4, 4, 4, 3, 3, 1, 1, 1, 1};    // profiles of the UEs - can be negotiated with the BS
 
 const int UL_audio_size = 41;    // UL slot audio size: audio (40B) + checksum (1B) (in Bytes)
+
+const int bit_depth[UEid_t] = {16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16};
+
+const int uart_speed[UEid_t] = {1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1};
 
 // --------------------------------------------------------------------------------------------
 // UE INITIAL
@@ -137,18 +140,18 @@ broadcast chan started[UEid_t];    // UE start signal
 
 const int offset_used = -1;    // offset ID used (-1: using default)
 
-// offsets (in ms)
+// start offsets of the UEs(in ms)
 const int offsets[2][UEid_t] =
 {
-    {1, 2, 3, 4, 5, 6, 7, 8, 9, 10},
-    {10, 20, 5, 0, 10, 40, 7, 15, 30, 0}
+    {1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10},
+    {10, 20, 5, 0, 10, 40, 7, 15, 30, 0, 10, 20, 5, 0, 10, 40, 7, 15, 30, 0}
 };
 
 // VARIABLES ----------------------------------------------------------------------------------
 
-int BS_assignment[UEid_t] = {-1, -1, -1, -1, -1, -1, -1, -1, -1, -1};    // initial association with the BS
+int BS_assignment[UEid_t] = {-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1};    // initial association with the BS
 
-bool dedicated[UEid_t] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+bool dedicated[UEid_t] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};    // flag of slot assignment for a UE within the current frame
 
 // FUNCTIONS ----------------------------------------------------------------------------------
 
@@ -193,10 +196,7 @@ const int24_t disconnect_timeout = 100 * 1000 * unit;    // timeout for disconne
 
 // VARIABLES ----------------------------------------------------------------------------------
 
-// connection channel stability
-int connection_channel_stability[UEid_t] = {75, 75, 75, 75, 75, 75, 75, 75, 75, 75};
-
-int RACH_slot[BSid_t] = {0, 0};
+//int RACH_slot[BSid_t] = {0, 0};    // 
 
 int RACH_start[BSid_t] = {0, 0};    // start time of random access channel in the current frame
 
@@ -204,9 +204,9 @@ int RACH_size[BSid_t] = {0, 0};  // size of random access channel slots (us * un
 
 int RACH_id[BSid_t] = {-1, -1};    // UE id which sends RACH signal in the current RACH slot
 
-bool ACK[UEid_t] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0};    // BS acknowledge of the initial UL resource request from the UE
+bool ACK[UEid_t] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};    // BS acknowledge of the initial UL resource request from the UE
 
-bool connecting[UEid_t] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0};    // UE id which send RACH connection request
+bool connecting[UEid_t] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};    // UE id which send RACH connection request
 
 // --------------------------------------------------------------------------------------------
 // LISTEN_ONLY
@@ -244,11 +244,11 @@ broadcast chan UTCH[number_channels][UEid_t];    // up-link UE signal to BS tran
 
 // VARIABLES ----------------------------------------------------------------------------------
 
-int samples_ready[UEid_t] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0};    // audio samples ready to be read from memory
+int samples_ready[UEid_t] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};    // audio samples ready to be read from memory
 
-int24_t samples_lost[UEid_t] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0};    // audio samples that were lost because of moving relevant sample window
+int24_t samples_lost[UEid_t] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};    // audio samples that were lost because of moving relevant sample window
 
-bool ch_switch[UEid_t] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0};    // flag if channel switch is needed after sleep mode
+bool ch_switch[UEid_t] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};    // flag if channel switch is needed after sleep mode
 
 // FUNCTIONS ----------------------------------------------------------------------------------
 
@@ -257,9 +257,11 @@ int24_t getLatency(UEid_t id)
     return latency[static_profile[id]] * 1000 * unit;    // us
 }
 
-//double dsp_to_qca(){
-//    return (frame_size/1000 * audio_data_rate)/uart_speed;
-//}
+int dsp_to_qca(UEid_t id)
+{
+    BSid_t bs = getBS(id);
+    return fint(((frame_size[bs]/1000) * audio_quality[static_profile[id]])/uart_speed[id]);
+}
 
 // --------------------------------------------------------------------------------------------
 // QUEUE
@@ -462,42 +464,38 @@ int channel[BSid_t][2] =    // BCH transmission channel frequencies (kHz)
     {1, 2}
 };
 
-int BCH_duration[BSid_t] = {0, 0};
-
-int BCH_start[BSid_t] = {0, 0};
-
 bool retransmission[BSid_t] = {false, false};
 
 int number_slots[BSid_t] = {0, 0};    //  UTCHs, UCCHs and RACH
 
 Queue_t priority_queue[BSid_t] =    // Queue of active devices with profiles RTa, hqRTa and sRTA
 {
-    {-1, -1, 0, {{-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}}},
-    {-1, -1, 0, {{-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}}}
+    {-1, -1, 0, {{-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}}},
+    {-1, -1, 0, {{-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}}}
 };
 
 Queue_t request_queue[BSid_t] =    // Queue of active devices in joined and Listen-Only modes
 {
-    {-1, -1, 0, {{-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}}},
-    {-1, -1, 0, {{-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}}}
+    {-1, -1, 0, {{-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}}},
+    {-1, -1, 0, {{-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}}}
 };
 
 bool active_UE[BSid_t][UEid_t] = {    // identification of UE that are active
-    {0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
-    {0, 0, 0, 0, 0, 0, 0, 0, 0, 0}
+    {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+    {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}
 };
 
 bool listen_only_UE[BSid_t][UEid_t] = {    // identification of UE that are in Listen-Only mode
-    {0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
-    {0, 0, 0, 0, 0, 0, 0, 0, 0, 0}
+    {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+    {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}
 };
 
 bool connected_UE[BSid_t][UEid_t] = {    // identification of UE that are in initial connected mode
-    {0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
-    {0, 0, 0, 0, 0, 0, 0, 0, 0, 0}
+    {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+    {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}
 };
 
-int UE_CQI[UEid_t] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0};    // channel quality indications of all active UE
+int UE_CQI[UEid_t] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};    // channel quality indications of all active UE
 
 slotID_t current_slot[BSid_t] = {0, 0};
 
@@ -658,11 +656,11 @@ const int wake_up_latency = 250;    // wake-up latency (in us)
 
 // VARIABLES ----------------------------------------------------------------------------------
 
-int24_t sleep_time[UEid_t] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0};    // RRM (Radio Resource Manager) calculated sleep time for UE after receiving UL ACKs
+int24_t sleep_time[UEid_t] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};    // RRM (Radio Resource Manager) calculated sleep time for UE after receiving UL ACKs
 
-bool sleeping[UEid_t] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+bool sleeping[UEid_t] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};    // flag if a UE is sleeping
 
-int sleep_percent[UEid_t] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+int sleep_percent[UEid_t] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};    // sleeping percentage with regards to the frame duration
 
 // FUNCTIONS ----------------------------------------------------------------------------------
 
@@ -712,11 +710,11 @@ typedef struct {
 
 Point_t BS_location[number_BS] = {{20, 0}, {-10, 30}};
 
-Point_t UE_location[number_UE] = {{-1, -1}, {-1, -1}, {-1, -1}, {-1, -1}, {-1, -1}, {-1, -1}, {-1, -1}, {-1, -1}, {-1, -1}, {-1, -1}};
+Point_t UE_location[number_UE] = {{-1, -1}, {-1, -1}, {-1, -1}, {-1, -1}, {-1, -1}, {-1, -1}, {-1, -1}, {-1, -1}, {-1, -1}, {-1, -1}, {-1, -1}, {-1, -1}, {-1, -1}, {-1, -1}, {-1, -1}, {-1, -1}, {-1, -1}, {-1, -1}, {-1, -1}, {-1, -1}};
 
 int24_t distances[number_BS][UEid_t] = {
-    {-1, -1, -1, -1, -1, -1, -1, -1, -1, -1},
-    {-1, -1, -1, -1, -1, -1, -1, -1, -1, -1}
+    {-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1},
+    {-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1}
 };
 
 void getDistances(UEid_t id)
@@ -726,63 +724,63 @@ void getDistances(UEid_t id)
     Point_t p;
     BSid_t bs = getBS(id);
     // plane curves
-    if(id == 0)
+    if(id == 0 || id == 19)
     {
         // Lemniscate
         // 0.5 : 1
         x = cos(location_clk/speed_volume);
         y = sin(2 * location_clk/speed_volume)/2;
     }
-    if(id == 1)
+    if(id == 1 || id == 10)
     {
         // Nephroid
         // 3 : 4
         x = 3 * cos(location_clk/speed_volume) - cos(3 * location_clk/speed_volume);
         y = 3 * sin(location_clk/speed_volume) - sin(3 * location_clk/speed_volume);
     }
-    if(id == 2)
+    if(id == 2 || id == 11)
     {
         // 3 : 3
         x = 2 * cos(location_clk/speed_volume) + cos(2 * location_clk/speed_volume);
         y = 2 * sin(location_clk/speed_volume) - sin(2 * location_clk/speed_volume); 
     }
-    if(id == 3)
+    if(id == 3 || id == 12)
     {
         // Ellipse
         // 1 : 2
         x = 2 * cos(location_clk/speed_volume);
         y = sin(location_clk/speed_volume);
     }
-    if(id == 4)
+    if(id == 4 || id == 13)
     {
         // 4 : 4
         x = 3 * cos(-location_clk/speed_volume) + cos(5 * location_clk/speed_volume);
         y = 3 * sin(-location_clk/speed_volume) + sin(5 * location_clk/speed_volume);
     }
-    if(id == 5)
+    if(id == 5 || id == 14)
     {
         x = 5 * cos(-location_clk/speed_volume) + cos(2 * location_clk/speed_volume);
         y = 5 * sin(-location_clk/speed_volume) + sin(2 * location_clk/speed_volume);
     }
-    if(id == 6)
+    if(id == 6 || id == 15)
     {
         // Talbot curve
         x = (5 + sqrt(sin(location_clk/speed_volume))) * cos(location_clk/speed_volume);
         y = (5 + sqrt(sin(location_clk/speed_volume))) * sin(location_clk/speed_volume);
     }
-    if(id == 7)
+    if(id == 7 || id == 16)
     {
         // Astroid
         // 1 : 1
         x = pow(cos(location_clk/speed_volume), 3);
         y = pow(sin(location_clk/speed_volume), 3);
     }
-    if(id == 8)
+    if(id == 8 || id == 17)
     {
         x = cos(location_clk/speed_volume) * (2 * cos(2 * location_clk/speed_volume) + 1);
         y = sin(location_clk/speed_volume) * (2 * cos(location_clk/speed_volume) + 1);
     }
-    if(id == 9)
+    if(id == 9 || id == 18)
     {
         // Ellipse
         x = 2 * cos(location_clk/speed_volume);
@@ -835,8 +833,6 @@ const int internal_processing = 50;    // us
 const int cb_processing = 50;    // audio data processing time in central base (in us)
 
 const int decode_time = 1/(44000 * 1000000);    // audio decoding time with 44kHz packet rate (in us)
-
-const int uart_speed[UEid_t] = {6250, 6250, 6250, 6250, 6250, 6250, 6250, 6250, 6250, 6250};
 
 // --------------------------------------------------------------------------------------------
 // VARIABLES
@@ -1305,7 +1301,7 @@ void processQueue(Queue_t queue, bool audio)
     	        else
 	                duration = getULMetaDuration(ue.id);
 
-    	        temp_GI = ((transmission_duration - (BCH_duration[bs] + (UL_duration + duration) + ACK_duration + RACH_size[bs] + channel_switch/2))/(slot_count + 1)) - 5;
+    	        temp_GI = ((transmission_duration - (slots[bs][0].size + (UL_duration + duration) + ACK_duration + RACH_size[bs] + channel_switch/2))/(slot_count + 1)) - 5;
 	            // verify GI size
 	            if(!verifyGI(temp_GI))
 	                return;
@@ -2437,7 +2433,7 @@ dedicated[id]</label>
 // CONSTANTS
 // --------------------------------------------------------------------------------------------
 
-const int24_t start_offsets[UEid_t] = {5000, 0, 50000, 1000, 20000, 750, 100, 3030, 0, 2500};    // offsets of the UE start signal
+int24_t start_offsets[UEid_t] = {5000, 0, 50000, 1000, 20000, 750, 100, 3030, 0, 2500, 5000, 0, 50000, 1000, 20000, 750, 100, 3030, 0, 2500};    // offsets of the UE start signal
 
 // --------------------------------------------------------------------------------------------
 // VARIABLES
@@ -2450,7 +2446,12 @@ int mode = 0;    // 0 - Initial, 1 - Listen Only, 2 - Streaming
 // --------------------------------------------------------------------------------------------
 // FUNCTIONS
 // --------------------------------------------------------------------------------------------
-</declaration>
+
+void setOffset()    // setting offset values from possible variations in offsets
+{
+    if(offset_used != -1)
+        start_offsets[id] = offsets[offset_used][id] * 1000 * unit;
+}</declaration>
 		<location id="id98" x="-15130" y="-15266" color="#ffffff">
 			<name x="-15172" y="-15291">INIT</name>
 			<label kind="invariant" x="-15223" y="-15274">offset' == 0</label>
@@ -3355,22 +3356,7 @@ profile[id] = initial</label>
 	<template>
 		<name>UserSample</name>
 		<parameter>UEid_t id</parameter>
-		<declaration>// id: UE identification number
-// audio_quality: audio sampling rate (kHz or kb/s)
-// bit_depth: bits per sample]
-// uart_speed: UART connection speed between DSP and QCA (Mbits/s)
-
-// --------------------------------------------------------------------------------------------
-// CONSTANTS
-// --------------------------------------------------------------------------------------------
-
-int audio_quality[UEid_t] = {48, 48, 48, 48, 48, 48, 48, 48, 48, 48};
-
-int bit_depth[UEid_t] = {16, 16, 16, 16, 16, 16, 16, 16, 16, 16};
-
-int uart_speed[UEid_t] = {1, 1, 1, 1, 1, 1, 1, 1, 1, 1};
-
-// --------------------------------------------------------------------------------------------
+		<declaration>// --------------------------------------------------------------------------------------------
 // VARIABLES
 // --------------------------------------------------------------------------------------------
 
@@ -3535,6 +3521,123 @@ usr_6sm = UserSample(5);
 usr_6sl = UserSleep(5);
 usr_6ip = InternalUEProcessing(5);
 
+usr_7 = UserStates(6);
+usr_7c = UserConnect(6);
+usr_7j = UserJoined(6);
+usr_7lt = UserListenOnly(6);
+usr_7s = UserStream(6);
+usr_7sm = UserSample(6);
+usr_7sl = UserSleep(6);
+usr_7ip = InternalUEProcessing(6);
+
+usr_8 = UserStates(7);
+usr_8c = UserConnect(7);
+usr_8j = UserJoined(7);
+usr_8lt = UserListenOnly(7);
+usr_8s = UserStream(7);
+usr_8sm = UserSample(7);
+usr_8sl = UserSleep(7);
+usr_8ip = InternalUEProcessing(7);
+
+usr_9 = UserStates(8);
+usr_9c = UserConnect(8);
+usr_9j = UserJoined(8);
+usr_9lt = UserListenOnly(8);
+usr_9s = UserStream(8);
+usr_9sm = UserSample(8);
+usr_9sl = UserSleep(8);
+usr_9ip = InternalUEProcessing(8);
+
+usr_10 = UserStates(9);
+usr_10c = UserConnect(9);
+usr_10j = UserJoined(9);
+usr_10lt = UserListenOnly(9);
+usr_10s = UserStream(9);
+usr_10sm = UserSample(9);
+usr_10sl = UserSleep(9);
+usr_10ip = InternalUEProcessing(9);
+
+usr_11 = UserStates(10);
+usr_11c = UserConnect(10);
+usr_11j = UserJoined(10);
+usr_11lt = UserListenOnly(10);
+usr_11s = UserStream(10);
+usr_11sm = UserSample(10);
+usr_11sl = UserSleep(10);
+usr_11ip = InternalUEProcessing(10);
+
+usr_12 = UserStates(11);
+usr_12c = UserConnect(11);
+usr_12j = UserJoined(11);
+usr_12lt = UserListenOnly(11);
+usr_12s = UserStream(11);
+usr_12sm = UserSample(11);
+usr_12sl = UserSleep(11);
+usr_12ip = InternalUEProcessing(11);
+
+usr_13 = UserStates(12);
+usr_13c = UserConnect(12);
+usr_13j = UserJoined(12);
+usr_13lt = UserListenOnly(12);
+usr_13s = UserStream(12);
+usr_13sm = UserSample(12);
+usr_13sl = UserSleep(12);
+usr_13ip = InternalUEProcessing(12);
+
+usr_14 = UserStates(13);
+usr_14c = UserConnect(13);
+usr_14j = UserJoined(13);
+usr_14lt = UserListenOnly(13);
+usr_14s = UserStream(13);
+usr_14sm = UserSample(13);
+usr_14sl = UserSleep(13);
+usr_14ip = InternalUEProcessing(13);
+
+usr_15 = UserStates(14);
+usr_15c = UserConnect(14);
+usr_15j = UserJoined(14);
+usr_15lt = UserListenOnly(14);
+usr_15s = UserStream(14);
+usr_15sm = UserSample(14);
+usr_15sl = UserSleep(14);
+usr_15ip = InternalUEProcessing(14);
+
+usr_16 = UserStates(15);
+usr_16c = UserConnect(15);
+usr_16j = UserJoined(15);
+usr_16lt = UserListenOnly(15);
+usr_16s = UserStream(15);
+usr_16sm = UserSample(15);
+usr_16sl = UserSleep(15);
+usr_16ip = InternalUEProcessing(15);
+
+usr_17 = UserStates(16);
+usr_17c = UserConnect(16);
+usr_17j = UserJoined(16);
+usr_17lt = UserListenOnly(16);
+usr_17s = UserStream(16);
+usr_17sm = UserSample(16);
+usr_17sl = UserSleep(16);
+usr_17ip = InternalUEProcessing(16);
+
+usr_18 = UserStates(17);
+usr_18c = UserConnect(17);
+usr_18j = UserJoined(17);
+usr_18lt = UserListenOnly(17);
+usr_18s = UserStream(17);
+usr_18sm = UserSample(17);
+usr_18sl = UserSleep(17);
+usr_18ip = InternalUEProcessing(17);
+
+usr_19 = UserStates(18);
+usr_19c = UserConnect(18);
+usr_19j = UserJoined(18);
+usr_19lt = UserListenOnly(18);
+usr_19s = UserStream(18);
+usr_19sm = UserSample(18);
+usr_19sl = UserSleep(18);
+usr_19ip = InternalUEProcessing(18);
+
 bs_1 = BaseStation(0);
 bs_1clk = FrameClock(0);
 bs_1s = Scheduler(0);
@@ -3554,7 +3657,20 @@ usr_2, usr_2sl, usr_2c, usr_2j, usr_2s, usr_2sm, usr_2ip,
 usr_3, usr_3sl, usr_3c, usr_3j, usr_3lt, usr_3s, usr_3sm, usr_3ip,
 usr_4, usr_4sl, usr_4c, usr_4j, usr_4lt, usr_4s, usr_4sm, usr_4ip,
 usr_5, usr_5sl, usr_5c, usr_5j, usr_5lt, usr_5s, usr_5sm, usr_5ip,
-usr_6, usr_6sl, usr_6c, usr_6j, usr_6lt, usr_6s, usr_6sm, usr_6ip;</system>
+usr_6, usr_6sl, usr_6c, usr_6j, usr_6lt, usr_6s, usr_6sm, usr_6ip,
+usr_7, usr_7sl, usr_7c, usr_7j, usr_7lt, usr_7s, usr_7sm, usr_7ip,
+usr_8, usr_8sl, usr_8c, usr_8j, usr_8lt, usr_8s, usr_8sm, usr_8ip,
+usr_9, usr_9sl, usr_9c, usr_9j, usr_9lt, usr_9s, usr_9sm, usr_9ip,
+usr_10, usr_10sl, usr_10c, usr_10j, usr_10lt, usr_10s, usr_10sm, usr_10ip,
+usr_11, usr_11sl, usr_11c, usr_11j, usr_11lt, usr_11s, usr_11sm, usr_11ip,
+usr_12, usr_12sl, usr_12c, usr_12j, usr_12lt, usr_12s, usr_12sm, usr_12ip,
+usr_13, usr_13sl, usr_13c, usr_13j, usr_13lt, usr_13s, usr_13sm, usr_13ip,
+usr_14, usr_14sl, usr_14c, usr_14j, usr_14lt, usr_14s, usr_14sm, usr_14ip,
+usr_15, usr_15sl, usr_15c, usr_15j, usr_15lt, usr_15s, usr_15sm, usr_15ip,
+usr_16, usr_16sl, usr_16c, usr_16j, usr_16lt, usr_16s, usr_16sm, usr_16ip,
+usr_17, usr_17sl, usr_17c, usr_17j, usr_17lt, usr_17s, usr_17sm, usr_17ip,
+usr_18, usr_18sl, usr_18c, usr_18j, usr_18lt, usr_18s, usr_18sm, usr_18ip,
+usr_19, usr_19sl, usr_19c, usr_19j, usr_19lt, usr_19s, usr_19sm, usr_19ip;</system>
 	<queries>
 		<query>
 			<formula>E&lt;&gt; ( bs_1.TRANSMIT_BCH and bs_1s.INITIAL and bs_1ip.INITIAL and bs_2.TRANSMIT_BCH and bs_2s.INITIAL and bs_2ip.INITIAL and usr_1.ON and usr_1s.INITIAL and usr_1c.INITIAL and usr_1j.INITIAL and usr_1lt.INITIAL and usr_1sm.INITIAL )</formula>
