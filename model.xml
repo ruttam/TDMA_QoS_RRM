@@ -1296,7 +1296,7 @@ void processQueue(Queue_t queue, bool audio)
     if(!isEmpty(queue))
     {
         int i = queue.size;
-	    while(i &gt; 0)
+	    while(i-- &gt; 0)
 	    {
 	        int temp_GI;
 	        int duration;
@@ -1319,8 +1319,7 @@ void processQueue(Queue_t queue, bool audio)
                 // UL
                 setSlot(j++, ue.id, slot_start, duration, 0, 3, 2);
 	            slot_start += duration;
-                slot_count = j;
-                i--;
+                slot_count++;
             }
 
             if(queue.size &gt; 1)
@@ -1393,7 +1392,7 @@ void scheduleFrame()
     number_slots[bs] = slot_count - 1;
 
     // ACK BCH
-    if(slot_count &gt; 3) {
+    if(number_slots[bs] &gt; 2) {
         slot_size = ACK_duration;
         setSlot(j++, -1, slot_start, slot_size, 0, 5, 3);
 	    slot_start += slot_size;
