@@ -14,7 +14,7 @@ const int unit = 1;    // time unit ratio wrt 1 us
 const int number_BS = 2;    // number of Base Stations
 typedef int [0, number_BS - 1] BSid_t;
 
-clock frame_clk[BSid_t];    // frame clock timer
+clock frame_clk[1];    // frame clock timer
 
 clock location_clk;    // UE location shift timer
 
@@ -33,6 +33,7 @@ const profileId_t RTa = 3;            // Real-Time Audio
 const profileId_t HqRTa = 4;          // High-Quality Real-Time Audio
 
 typedef int[-(1&lt;&lt;23),(1&lt;&lt;23)-1] int24_t;
+const double M_PI = 3.14159265358979312;  // Pi
 
 const int latency[profileId_t] = {-1, 2500, 70, 40, 20};    // latency requirements of each type of profiles
 
@@ -93,7 +94,7 @@ typedef struct {
     int type;    // 0 - BCH, 1 - RACH, 2 - UL, 3 - ACK
 } slot_t;
 
-typedef int [0, number_UE + 2] slotID_t;
+typedef int [0, number_UE + 3] slotID_t;
 
 slot_t slots[BSid_t][slotID_t] = {
     {{-1, -1, -1, -1, -1, -1}, {-1, -1, -1, -1, -1, -1}, {-1, -1, -1, -1, -1, -1},
@@ -103,7 +104,7 @@ slot_t slots[BSid_t][slotID_t] = {
      {-1, -1, -1, -1, -1, -1}, {-1, -1, -1, -1, -1, -1}, {-1, -1, -1, -1, -1, -1},
      {-1, -1, -1, -1, -1, -1}, {-1, -1, -1, -1, -1, -1}, {-1, -1, -1, -1, -1, -1},
      {-1, -1, -1, -1, -1, -1}, {-1, -1, -1, -1, -1, -1}, {-1, -1, -1, -1, -1, -1},
-     {-1, -1, -1, -1, -1, -1}, {-1, -1, -1, -1, -1, -1}},
+     {-1, -1, -1, -1, -1, -1}, {-1, -1, -1, -1, -1, -1}, {-1, -1, -1, -1, -1, -1}},
     {{-1, -1, -1, -1, -1, -1}, {-1, -1, -1, -1, -1, -1}, {-1, -1, -1, -1, -1, -1},
      {-1, -1, -1, -1, -1, -1}, {-1, -1, -1, -1, -1, -1}, {-1, -1, -1, -1, -1, -1},
      {-1, -1, -1, -1, -1, -1}, {-1, -1, -1, -1, -1, -1}, {-1, -1, -1, -1, -1, -1},
@@ -111,7 +112,7 @@ slot_t slots[BSid_t][slotID_t] = {
      {-1, -1, -1, -1, -1, -1}, {-1, -1, -1, -1, -1, -1}, {-1, -1, -1, -1, -1, -1},
      {-1, -1, -1, -1, -1, -1}, {-1, -1, -1, -1, -1, -1}, {-1, -1, -1, -1, -1, -1},
      {-1, -1, -1, -1, -1, -1}, {-1, -1, -1, -1, -1, -1}, {-1, -1, -1, -1, -1, -1},
-     {-1, -1, -1, -1, -1, -1}, {-1, -1, -1, -1, -1, -1}}
+     {-1, -1, -1, -1, -1, -1}, {-1, -1, -1, -1, -1, -1}, {-1, -1, -1, -1, -1, -1}}
 };
 
 // --------------------------------------------------------------------------------------------
@@ -128,7 +129,7 @@ const int UL_audio_size = 41;    // UL slot audio size: audio (40B) + checksum (
 
 const int bit_depth[UEid_t] = {16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16};
 
-const int uart_speed[UEid_t] = {1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1};
+const int UE_uart_speed[UEid_t] = {1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1};    // UE UART speed in Mbits/s
 
 // --------------------------------------------------------------------------------------------
 // UE INITIAL
@@ -260,7 +261,7 @@ int24_t getLatency(UEid_t id)
 int dsp_to_qca(UEid_t id)
 {
     BSid_t bs = getBS(id);
-    return fint(((frame_size[bs]/1000) * audio_quality[static_profile[id]])/uart_speed[id]);
+    return fint(((frame_size[bs]/1000) * audio_quality[static_profile[id]])/UE_uart_speed[id]);
 }
 
 // --------------------------------------------------------------------------------------------
@@ -578,8 +579,9 @@ int getULMetaData()
     return (UL_header_size + UL_meta_size) * 8;
 }
 
-int getULMetaDuration(BSid_t bs)    // in us
+int getULMetaDuration(UEid_t id)    // in us
 {
+    BSid_t bs = getBS(id);
     return getULMetaData()/data_rate[bs];
 }
 
@@ -699,13 +701,13 @@ int getCh(UEid_t id, int ch)
 
 // CONSTANTS ----------------------------------------------------------------------------------
 
-const int speed_volume = 10000000;    // a multiply of PI value: the higher, the slower is motion
+const int24_t speed_volume = 1000000;    // a multiply of PI value: the higher, the slower is motion
 
 // VARIABLES ----------------------------------------------------------------------------------
 
 typedef struct {
-    int a;
-    int b;
+    int24_t a;
+    int24_t b;
 } Point_t;
 
 Point_t BS_location[number_BS] = {{20, 0}, {-10, 30}};
@@ -765,8 +767,8 @@ void getDistances(UEid_t id)
     if(id == 6 || id == 15)
     {
         // Talbot curve
-        x = (5 + sqrt(sin(location_clk/speed_volume))) * cos(location_clk/speed_volume);
-        y = (5 + sqrt(sin(location_clk/speed_volume))) * sin(location_clk/speed_volume);
+        x = (5 + sqrt(abs(fint(sin(location_clk/speed_volume))))) * cos(location_clk/speed_volume);
+        y = (5 + sqrt(abs(fint(sin(location_clk/speed_volume))))) * sin(location_clk/speed_volume);
     }
     if(id == 7 || id == 16)
     {
@@ -786,12 +788,12 @@ void getDistances(UEid_t id)
         x = 2 * cos(location_clk/speed_volume);
         y = sin(location_clk/speed_volume);
     }
-    UE_location[id].a = fint(x*100);
-    UE_location[id].b = fint(y*100);
+    UE_location[id].a = fint(x);
+    UE_location[id].b = fint(y);
     for(i: BSid_t)
     {
         p = BS_location[i];
-        distances[i][id] = fint(sqrt(pow(p.a - x * 100, 2) + pow(p.b - y * 100, 2)));
+        distances[i][id] = fint(sqrt(fabs(pow(p.a - x * 100, 2) + pow(p.b - y * 100, 2))))/speed_volume/100;
     }
 }
 
@@ -806,17 +808,21 @@ int24_t getCQI(UEid_t id, BSid_t bs)
 			<urgent/>
 		</location>
 		<location id="id1" x="0" y="127">
+			<label kind="invariant" x="-110" y="153">location_clk &lt;= M_PI * speed_volume</label>
 		</location>
 		<init ref="id0"/>
 		<transition>
 			<source ref="id1"/>
 			<target ref="id1"/>
+			<label kind="guard" x="102" y="59">location_clk &gt;= M_PI * speed_volume</label>
+			<label kind="assignment" x="102" y="76">location_clk = 0</label>
 			<nail x="93" y="127"/>
-			<nail x="93" y="42"/>
+			<nail x="93" y="51"/>
 		</transition>
 		<transition>
 			<source ref="id0"/>
 			<target ref="id1"/>
+			<label kind="assignment" x="-119" y="51">location_clk = 0</label>
 		</transition>
 	</template>
 	<template>
@@ -867,7 +873,7 @@ int getDataType()
 
 int getUARTTime()
 {
-    return getULAudioData(id)/(uart_speed[id]/1000);
+    return getULAudioData(id)/UE_uart_speed[id];
 }
 
 // --------------------------------------------------------------------------------------------
@@ -1274,12 +1280,14 @@ bool verifyGI(int temp_GI)
 
 void setSlot(int i, int id, int start, int size, int data, int mcs, int type)
 {
-    slots[bs][i].owner = id;
-    slots[bs][i].start = start;
-    slots[bs][i].size = size;
-    slots[bs][i].data = data;
-    slots[bs][i].MCS = mcs;
-    slots[bs][i].type = type;
+    if(i &lt; number_UE + 3){
+        slots[bs][i].owner = id;
+        slots[bs][i].start = start;
+        slots[bs][i].size = size;
+        slots[bs][i].data = data;
+        slots[bs][i].MCS = mcs;
+        slots[bs][i].type = type;
+    }
 }
 
 
@@ -1288,7 +1296,7 @@ void processQueue(Queue_t queue, bool audio)
     if(!isEmpty(queue))
     {
         int i = queue.size;
-	    while(i-- &gt; 0)
+	    while(i &gt; 0)
 	    {
 	        int temp_GI;
 	        int duration;
@@ -1311,7 +1319,8 @@ void processQueue(Queue_t queue, bool audio)
                 // UL
                 setSlot(j++, ue.id, slot_start, duration, 0, 3, 2);
 	            slot_start += duration;
-                slot_count += 1;
+                slot_count = j;
+                i--;
             }
 
             if(queue.size &gt; 1)
@@ -1856,7 +1865,7 @@ x = 0</label>
 // CONSTANTS
 // --------------------------------------------------------------------------------------------
 
-const int qca_latency = 50;    // QCA processing time (in us)
+const int qca_latency = 1;    // QCA processing time (in us)
 
 const int uart_speed = 1000;    // uart transmission speed (in kbit/s)
 
@@ -2454,17 +2463,19 @@ void setOffset()    // setting offset values from possible variations in offsets
 }</declaration>
 		<location id="id98" x="-15130" y="-15266" color="#ffffff">
 			<name x="-15172" y="-15291">INIT</name>
-			<label kind="invariant" x="-15223" y="-15274">offset' == 0</label>
+			<label kind="invariant" x="-15232" y="-15274">offset' == 0</label>
 			<urgent/>
 		</location>
 		<location id="id99" x="-15130" y="-14705">
 			<name x="-15240" y="-14706">LISTEN_ONLY</name>
+			<label kind="invariant" x="-15232" y="-14688">offset' == 0</label>
 		</location>
 		<location id="id100" x="-14730" y="-14705">
 			<name x="-14713" y="-14723">STREAMING</name>
+			<label kind="invariant" x="-14713" y="-14705">offset' == 0</label>
 		</location>
 		<location id="id101" x="-14934" y="-14705" color="#4e342e">
-			<name x="-14959" y="-14696">FAILED</name>
+			<name x="-14960" y="-14688">FAILED</name>
 			<urgent/>
 		</location>
 		<location id="id102" x="-14730" y="-15266" color="#4e342e">
@@ -2473,7 +2484,7 @@ void setOffset()    // setting offset values from possible variations in offsets
 		</location>
 		<location id="id103" x="-15130" y="-15096">
 			<name x="-15240" y="-15113">CONNECTING</name>
-			<label kind="invariant" x="-15223" y="-15096">offset' == 0</label>
+			<label kind="invariant" x="-15232" y="-15096">offset' == 0</label>
 		</location>
 		<location id="id104" x="-15130" y="-15198">
 			<name x="-15113" y="-15223">ON</name>
@@ -2482,9 +2493,11 @@ offset &lt;= start_offsets[id]</label>
 		</location>
 		<location id="id105" x="-15130" y="-14858">
 			<name x="-15198" y="-14875">JOINED</name>
+			<label kind="invariant" x="-15232" y="-14858">offset' == 0</label>
 		</location>
 		<location id="id106" x="-14934" y="-14858" color="#ca6f1e">
-			<name x="-14968" y="-14917">SLEEPING</name>
+			<name x="-14968" y="-14943">SLEEPING</name>
+			<label kind="invariant" x="-14968" y="-14926">offset' == 0</label>
 		</location>
 		<location id="id107" x="-15130" y="-14994">
 			<urgent/>
@@ -2510,8 +2523,8 @@ offset &lt;= start_offsets[id]</label>
 		<transition>
 			<source ref="id105"/>
 			<target ref="id106"/>
-			<label kind="synchronisation" x="-15070" y="-14926">sleep[id]?</label>
-			<label kind="assignment" x="-15070" y="-14909">sleeping[id] = 1</label>
+			<label kind="synchronisation" x="-15096" y="-14926">sleep[id]?</label>
+			<label kind="assignment" x="-15096" y="-14909">sleeping[id] = 1</label>
 			<nail x="-15113" y="-14892"/>
 			<nail x="-14951" y="-14892"/>
 		</transition>
@@ -2550,7 +2563,7 @@ offset &lt;= start_offsets[id]</label>
 		<transition>
 			<source ref="id100"/>
 			<target ref="id106"/>
-			<label kind="synchronisation" x="-14883" y="-14926">sleep[id]?</label>
+			<label kind="synchronisation" x="-14841" y="-14926">sleep[id]?</label>
 			<label kind="assignment" x="-14883" y="-14909">sleeping[id] = 1</label>
 			<nail x="-14773" y="-14892"/>
 			<nail x="-14909" y="-14892"/>
@@ -2659,7 +2672,7 @@ offset &lt;= start_offsets[id]</label>
 // CONSTANTS
 // --------------------------------------------------------------------------------------------
 
-const int qca_latency = 50;    // QCA processing time (in us)
+const int qca_latency = 1;    // QCA processing time (in us)
 
 const int uart_speed = 1000;    // uart transmission speed (in kbit/s)
 
@@ -2691,10 +2704,10 @@ int slot;    // dedicated slot index
 // --------------------------------------------------------------------------------------------
 // FUNCTIONS
 // --------------------------------------------------------------------------------------------
-int time;
-int getUARTTime()
+int24_t time;
+int24_t getUARTTime()
 {
-    time = samples_ready[id] * 16/(uart_speed/1000);
+    time = (samples_ready[id] * 16)/(UE_uart_speed[id]);
     return time;
 }
 
@@ -2711,9 +2724,9 @@ void samplesLost()
 // --------------------------------------------------------------------------------------------
 // TODO
 // --------------------------------------------------------------------------------------------</declaration>
-		<location id="id108" x="-1317" y="-969" color="#ffffff">
-			<name x="-1343" y="-1037">INITIAL</name>
-			<label kind="invariant" x="-1343" y="-1020">x' == 0 &amp;&amp;
+		<location id="id108" x="-1292" y="-969" color="#ffffff">
+			<name x="-1318" y="-1037">INITIAL</name>
+			<label kind="invariant" x="-1318" y="-1020">x' == 0 &amp;&amp;
 z' == 0</label>
 		</location>
 		<location id="id109" x="-1003" y="-782" color="#4e342e">
@@ -2730,8 +2743,7 @@ z' == 0</label>
 		</location>
 		<location id="id112" x="-960" y="-204" color="#6c3483">
 			<name x="-1003" y="-187">TRANSMIT</name>
-			<label kind="invariant" x="-994" y="-170">z' == 1 &amp;&amp;
-z &lt;= slots[bs][slot].size/2</label>
+			<label kind="invariant" x="-1003" y="-170">z &lt;= slots[bs][slot].size/2</label>
 		</location>
 		<location id="id113" x="-824" y="-671" color="#138d75">
 			<name x="-807" y="-688">BCH_ACK</name>
@@ -2755,8 +2767,8 @@ frame_clk[bs] &lt;= slots[bs][slot].start</label>
 			<urgent/>
 		</location>
 		<location id="id118" x="-1317" y="-782" color="#ffa500">
-			<name x="-1445" y="-816">WAIT_BCH</name>
-			<label kind="invariant" x="-1445" y="-799">z' == 0 &amp;&amp;
+			<name x="-1377" y="-867">WAIT_BCH</name>
+			<label kind="invariant" x="-1377" y="-850">z' == 0 &amp;&amp;
 x' == 1 &amp;&amp;
 x &lt;= getLatency(id)</label>
 		</location>
@@ -2768,7 +2780,8 @@ x &lt;= getLatency(id)</label>
 			<label kind="invariant" x="-807" y="-595">z &lt;= qca_latency</label>
 		</location>
 		<location id="id121" x="-1317" y="-544" color="#ca6f1e">
-			<name x="-1385" y="-544">SLEEP</name>
+			<name x="-1377" y="-552">SLEEP</name>
+			<label kind="invariant" x="-1385" y="-535">z' == 0</label>
 		</location>
 		<location id="id122" x="-1317" y="-450" color="#00ff00">
 			<name x="-1394" y="-467">UL_ACK</name>
@@ -2779,7 +2792,8 @@ x &lt;= getLatency(id)</label>
 			<urgent/>
 		</location>
 		<location id="id124" x="-1215" y="-204" color="#ffa500">
-			<name x="-1249" y="-238">WAIT_ACK</name>
+			<name x="-1241" y="-255">WAIT_ACK</name>
+			<label kind="invariant" x="-1241" y="-238">z' == 0</label>
 		</location>
 		<location id="id125" x="-1317" y="-348">
 			<urgent/>
@@ -2794,8 +2808,8 @@ x &lt;= getLatency(id)</label>
 			<urgent/>
 		</location>
 		<location id="id129" x="-1487" y="-637">
-			<name x="-1632" y="-654">SWITCH_CHANNEL</name>
-			<label kind="invariant" x="-1632" y="-637">z &lt;= channel_switch</label>
+			<name x="-1615" y="-688">SWITCH_CHANNEL</name>
+			<label kind="invariant" x="-1615" y="-671">z &lt;= channel_switch</label>
 		</location>
 		<location id="id130" x="-1317" y="-637">
 			<urgent/>
@@ -2809,17 +2823,17 @@ x &lt;= getLatency(id)</label>
 		</branchpoint>
 		<branchpoint id="id133" x="-824" y="-739">
 		</branchpoint>
-		<branchpoint id="id134" x="-1130" y="-204">
+		<branchpoint id="id134" x="-1156" y="-204">
 		</branchpoint>
 		<init ref="id108"/>
 		<transition>
 			<source ref="id131"/>
 			<target ref="id126"/>
-			<label kind="guard" x="-1105" y="-501">frame_clk[bs] + qca_latency &gt;=
+			<label kind="guard" x="-1130" y="-501">frame_clk[bs] + qca_latency &gt;=
 slots[bs][slot].start</label>
 			<nail x="-1011" y="-459"/>
-			<nail x="-1113" y="-459"/>
-			<nail x="-1113" y="-586"/>
+			<nail x="-1139" y="-459"/>
+			<nail x="-1139" y="-586"/>
 		</transition>
 		<transition>
 			<source ref="id111"/>
@@ -2832,10 +2846,10 @@ getUARTTime()</label>
 		<transition>
 			<source ref="id131"/>
 			<target ref="id114"/>
-			<label kind="guard" x="-1062" y="-340">z &lt;= time &amp;&amp;
+			<label kind="guard" x="-1088" y="-331">z &lt;= time &amp;&amp;
 frame_clk[bs] + qca_latency &lt;
 slots[bs][slot].start</label>
-			<label kind="assignment" x="-1062" y="-280">z = 0</label>
+			<label kind="assignment" x="-1088" y="-280">z = 0</label>
 			<nail x="-977" y="-323"/>
 		</transition>
 		<transition>
@@ -2850,19 +2864,19 @@ slots[bs][slot].start</label>
 		<transition>
 			<source ref="id115"/>
 			<target ref="id130"/>
-			<label kind="guard" x="-1156" y="-884">x &lt; getLatency(id)</label>
-			<label kind="assignment" x="-1156" y="-867">ch = getCh(id, ch)</label>
-			<nail x="-1037" y="-841"/>
-			<nail x="-1232" y="-841"/>
+			<label kind="guard" x="-1215" y="-926">x &lt; getLatency(id)</label>
+			<label kind="assignment" x="-1215" y="-909">ch = getCh(id, ch)</label>
+			<nail x="-1436" y="-892"/>
+			<nail x="-1436" y="-697"/>
 		</transition>
 		<transition>
 			<source ref="id129"/>
 			<target ref="id126"/>
-			<label kind="guard" x="-1623" y="-620">z &gt;= channel_switch</label>
-			<label kind="assignment" x="-1623" y="-603">z = 0,
+			<label kind="guard" x="-1487" y="-603">z &gt;= channel_switch</label>
+			<label kind="assignment" x="-1487" y="-586">z = 0,
 ch_switch[id] = 0</label>
-			<nail x="-1487" y="-586"/>
-			<nail x="-1190" y="-586"/>
+			<nail x="-1487" y="-603"/>
+			<nail x="-1190" y="-603"/>
 		</transition>
 		<transition>
 			<source ref="id130"/>
@@ -2872,8 +2886,8 @@ ch_switch[id] = 0</label>
 		<transition>
 			<source ref="id130"/>
 			<target ref="id129"/>
-			<label kind="guard" x="-1462" y="-637">ch_switch[id]</label>
-			<label kind="assignment" x="-1462" y="-620">z = 0</label>
+			<label kind="guard" x="-1453" y="-637">ch_switch[id]</label>
+			<label kind="assignment" x="-1453" y="-620">z = 0</label>
 		</transition>
 		<transition>
 			<source ref="id113"/>
@@ -2900,8 +2914,8 @@ ch_switch[id] = 0</label>
 		<transition>
 			<source ref="id122"/>
 			<target ref="id121"/>
-			<label kind="synchronisation" x="-1385" y="-510">sleep[id]!</label>
-			<label kind="assignment" x="-1360" y="-493">x = 0</label>
+			<label kind="synchronisation" x="-1394" y="-510">sleep[id]!</label>
+			<label kind="assignment" x="-1368" y="-493">x = 0</label>
 		</transition>
 		<transition>
 			<source ref="id126"/>
@@ -2958,8 +2972,8 @@ ch = getCh(id, ch)</label>
 		<transition>
 			<source ref="id121"/>
 			<target ref="id130"/>
-			<label kind="synchronisation" x="-1411" y="-586">wake_up[id]?</label>
-			<label kind="assignment" x="-1445" y="-569">ch = getCh(id, ch)</label>
+			<label kind="synchronisation" x="-1309" y="-595">wake_up[id]?</label>
+			<label kind="assignment" x="-1309" y="-578">ch = getCh(id, ch)</label>
 		</transition>
 		<transition>
 			<source ref="id120"/>
@@ -2970,29 +2984,29 @@ ch = getCh(id, ch)</label>
 		<transition>
 			<source ref="id111"/>
 			<target ref="id114"/>
-			<label kind="guard" x="-816" y="-391">!samples_ready[id]</label>
-			<label kind="assignment" x="-816" y="-374">z = 0</label>
+			<label kind="guard" x="-816" y="-399">!samples_ready[id]</label>
+			<label kind="assignment" x="-816" y="-382">z = 0</label>
 		</transition>
 		<transition>
 			<source ref="id118"/>
 			<target ref="id119"/>
-			<label kind="guard" x="-1232" y="-773">x &lt;= getLatency(id)</label>
-			<label kind="synchronisation" x="-1232" y="-756">BCH[ch]?</label>
-			<label kind="assignment" x="-1232" y="-739">prob_success = getCQI(id, bs)</label>
+			<label kind="guard" x="-1266" y="-756">x &lt;= getLatency(id)</label>
+			<label kind="synchronisation" x="-1266" y="-731">BCH[ch]?</label>
+			<label kind="assignment" x="-1266" y="-714">prob_success = getCQI(id, bs)</label>
 			<nail x="-1300" y="-739"/>
 		</transition>
 		<transition>
 			<source ref="id116"/>
 			<target ref="id112"/>
-			<label kind="guard" x="-943" y="-246">frame_clk[bs] &gt;=
+			<label kind="guard" x="-952" y="-246">frame_clk[bs] &gt;=
 slots[bs][slot].start</label>
-			<label kind="assignment" x="-935" y="-204">z = 0</label>
+			<label kind="assignment" x="-926" y="-204">z = 0</label>
 		</transition>
 		<transition>
 			<source ref="id117"/>
 			<target ref="id130"/>
-			<label kind="synchronisation" x="-1538" y="-918">sample[id]!</label>
-			<label kind="assignment" x="-1538" y="-901">x = 0</label>
+			<label kind="synchronisation" x="-1547" y="-918">sample[id]!</label>
+			<label kind="assignment" x="-1547" y="-901">x = 0</label>
 			<nail x="-1462" y="-688"/>
 		</transition>
 		<transition>
@@ -3001,7 +3015,7 @@ slots[bs][slot].start</label>
 			<label kind="synchronisation" x="-1215" y="-127">UTCH[ch][id]!</label>
 			<label kind="assignment" x="-1215" y="-110">x = 0</label>
 			<label kind="probability" x="-1215" y="-144">100</label>
-			<nail x="-1130" y="-144"/>
+			<nail x="-1156" y="-144"/>
 			<nail x="-1215" y="-144"/>
 		</transition>
 		<transition>
@@ -3014,22 +3028,22 @@ x &gt;= getLatency(id)</label>
 		<transition>
 			<source ref="id112"/>
 			<target ref="id134"/>
-			<label kind="guard" x="-1113" y="-238">z &gt;= slots[bs][slot].size/2</label>
-			<label kind="assignment" x="-1113" y="-204">z = 0,
+			<label kind="guard" x="-1147" y="-229">z &gt;= slots[bs][slot].size/2</label>
+			<label kind="assignment" x="-1147" y="-204">z = 0,
 prob_success =
 getCQI(id, bs)</label>
 		</transition>
 		<transition>
 			<source ref="id114"/>
 			<target ref="id116"/>
-			<label kind="guard" x="-816" y="-297">z &gt;= qca_latency</label>
-			<label kind="assignment" x="-816" y="-280">z = 0</label>
+			<label kind="guard" x="-816" y="-289">z &gt;= qca_latency</label>
+			<label kind="assignment" x="-816" y="-272">z = 0</label>
 		</transition>
 		<transition>
 			<source ref="id110"/>
 			<target ref="id108"/>
-			<label kind="synchronisation" x="-1215" y="-1028">disconnected[id]!</label>
-			<label kind="assignment" x="-1215" y="-1011">x = 0,
+			<label kind="synchronisation" x="-1190" y="-1028">disconnected[id]!</label>
+			<label kind="assignment" x="-1190" y="-1011">x = 0,
 z = 0</label>
 		</transition>
 		<transition>
@@ -3040,17 +3054,18 @@ z = 0</label>
 		<transition>
 			<source ref="id109"/>
 			<target ref="id118"/>
-			<label kind="synchronisation" x="-1232" y="-841">failed[id]!</label>
-			<label kind="assignment" x="-1232" y="-824">x = 0,
+			<label kind="synchronisation" x="-1215" y="-833">failed[id]!</label>
+			<label kind="assignment" x="-1215" y="-816">x = 0,
 samplesLost()</label>
 			<nail x="-1241" y="-782"/>
 		</transition>
 		<transition>
 			<source ref="id118"/>
 			<target ref="id115"/>
-			<label kind="guard" x="-1266" y="-935">x &gt;= getLatency(id)</label>
-			<label kind="assignment" x="-1266" y="-918">disconnect++</label>
-			<nail x="-1266" y="-892"/>
+			<label kind="guard" x="-1173" y="-884">x &gt;= getLatency(id)</label>
+			<label kind="assignment" x="-1173" y="-867">disconnect++</label>
+			<nail x="-1232" y="-850"/>
+			<nail x="-1045" y="-850"/>
 		</transition>
 		<transition>
 			<source ref="id108"/>
@@ -3133,7 +3148,6 @@ int requestStart()
 			<label kind="invariant" x="-3349" y="-2805">x &lt;= scan_lat</label>
 		</location>
 		<location id="id137" x="-3238" y="-3000">
-			<name x="-3248" y="-3034">three</name>
 			<urgent/>
 		</location>
 		<location id="id138" x="-2626" y="-3153">
@@ -3165,11 +3179,10 @@ int requestStart()
 			<urgent/>
 		</location>
 		<location id="id145" x="-3034" y="-3119" color="#4e342e">
-			<name x="-3077" y="-3102">DISCONNECT</name>
+			<name x="-3085" y="-3102">DISCONNECT</name>
 			<urgent/>
 		</location>
 		<location id="id146" x="-2839" y="-2847">
-			<name x="-2849" y="-2881">two</name>
 			<urgent/>
 		</location>
 		<location id="id147" x="-3043" y="-3000">
@@ -3177,7 +3190,6 @@ int requestStart()
 			<label kind="invariant" x="-3102" y="-3034">x &lt;= channel_switch</label>
 		</location>
 		<location id="id148" x="-3451" y="-2915">
-			<name x="-3468" y="-2898">one</name>
 			<urgent/>
 		</location>
 		<branchpoint id="id149" x="-2839" y="-2779">
@@ -3265,8 +3277,8 @@ x = 0</label>
 		<transition>
 			<source ref="id139"/>
 			<target ref="id145"/>
-			<label kind="guard" x="-3000" y="-3145">x &gt;= disconnect_timeout</label>
-			<label kind="assignment" x="-2966" y="-3119">connecting[id] = 0,
+			<label kind="guard" x="-2975" y="-3145">x &gt;= disconnect_timeout</label>
+			<label kind="assignment" x="-2975" y="-3119">connecting[id] = 0,
 x = 0, ch = -1</label>
 			<nail x="-2839" y="-3119"/>
 		</transition>
@@ -3297,17 +3309,17 @@ x = 0, ch = -1</label>
 		<transition>
 			<source ref="id148"/>
 			<target ref="id137"/>
-			<label kind="guard" x="-3434" y="-3000">i &gt;= number_channels &amp;&amp;
+			<label kind="guard" x="-3442" y="-2992">i &gt;= number_channels &amp;&amp;
 j &lt; number_retries</label>
-			<label kind="assignment" x="-3434" y="-2966">i = 0, j++</label>
+			<label kind="assignment" x="-3442" y="-2958">i = 0, j++</label>
 			<nail x="-3451" y="-3000"/>
 		</transition>
 		<transition>
 			<source ref="id137"/>
 			<target ref="id135"/>
-			<label kind="guard" x="-3425" y="-3153">j &gt;= number_retries</label>
-			<label kind="synchronisation" x="-3408" y="-3136">disconnected[id]!</label>
-			<label kind="assignment" x="-3332" y="-3111">i = 0,
+			<label kind="guard" x="-3442" y="-3153">j &gt;= number_retries</label>
+			<label kind="synchronisation" x="-3425" y="-3136">disconnected[id]!</label>
+			<label kind="assignment" x="-3340" y="-3119">i = 0,
 j = 0</label>
 			<nail x="-3298" y="-3026"/>
 			<nail x="-3298" y="-3153"/>
@@ -3315,11 +3327,11 @@ j = 0</label>
 		<transition>
 			<source ref="id148"/>
 			<target ref="id137"/>
-			<label kind="guard" x="-3493" y="-3077">i &lt; number_channels</label>
-			<label kind="assignment" x="-3493" y="-3060">i++</label>
+			<label kind="guard" x="-3493" y="-3068">i &lt; number_channels</label>
+			<label kind="assignment" x="-3493" y="-3051">i++</label>
 			<nail x="-3493" y="-2915"/>
-			<nail x="-3493" y="-3034"/>
-			<nail x="-3349" y="-3034"/>
+			<nail x="-3493" y="-3025"/>
+			<nail x="-3332" y="-3026"/>
 		</transition>
 		<transition>
 			<source ref="id143"/>
@@ -3347,7 +3359,7 @@ ch = getChan(id, ch, bs)</label>
 		<transition>
 			<source ref="id135"/>
 			<target ref="id137"/>
-			<label kind="synchronisation" x="-3230" y="-3110">started[id]?</label>
+			<label kind="synchronisation" x="-3230" y="-3102">started[id]?</label>
 			<label kind="assignment" x="-3230" y="-3085">i = 0,
 j = 0,
 profile[id] = initial</label>
@@ -3375,7 +3387,7 @@ int uart_latency = 0;    // UART transmission of audio data latency (in us)
 int getSampleTime()
 {
     // if audio quality is in bit rate (kbps)
-    int sample_rate = audio_quality[id]/bit_depth[id];    // kHz = 1000 * samples/s
+    int sample_rate = audio_quality[static_profile[id]]/bit_depth[id];    // kHz = 1000 * samples/s
     // if audio quality is in sample rate (kHz)
     int time_per_sample = 1/(sample_rate * 1000 * 1000 * unit);    // us * unit
     return time_per_sample;
@@ -3386,7 +3398,7 @@ void getNumberSamples()
     //int time = getSampleTime();
     //samples = frame_size[bs]/time;
     //return fint(frame_size[bs]/time);
-    samples_ready[id] = audio_quality[id] * (frame_size[bs]/1000);
+    samples_ready[id] = audio_quality[static_profile[id]] * (frame_size[bs]/1000);
 }
 
 int getUARTTime()
@@ -3395,22 +3407,22 @@ int getUARTTime()
     return 10;
 }</declaration>
 		<location id="id151" x="-764" y="-654">
-			<name x="-816" y="-722">SAMPLE</name>
-			<label kind="invariant" x="-816" y="-705">x' == 1 &amp;&amp;
+			<name x="-807" y="-722">SAMPLE</name>
+			<label kind="invariant" x="-807" y="-705">x' == 1 &amp;&amp;
 x &lt;= frame_size[bs]</label>
 		</location>
 		<location id="id152" x="-765" y="-544" color="#ff00ff">
-			<name x="-799" y="-527">PROCESS_CODEC</name>
-			<label kind="invariant" x="-799" y="-510">x &lt;= codec_latency</label>
+			<name x="-824" y="-527">PROCESS_CODEC</name>
+			<label kind="invariant" x="-824" y="-510">x &lt;= codec_latency</label>
 		</location>
 		<location id="id153" x="-1105" y="-654" color="#ffffff">
 			<name x="-1130" y="-705">INITIAL</name>
 			<label kind="invariant" x="-1130" y="-688">x' == 0</label>
 		</location>
 		<location id="id154" x="-391" y="-544">
-			<name x="-433" y="-527">TRANSFER</name>
-			<label kind="invariant" x="-433" y="-510">x &lt;= uart_latency</label>
-			<label kind="comments" x="-433" y="-484">DSP to QCA TX</label>
+			<name x="-425" y="-527">TRANSFER</name>
+			<label kind="invariant" x="-425" y="-510">x &lt;= uart_latency</label>
+			<label kind="comments" x="-425" y="-484">DSP to QCA TX</label>
 		</location>
 		<location id="id155" x="-1105" y="-544" color="#4e342e">
 			<name x="-1165" y="-553">STOP</name>
@@ -3449,14 +3461,14 @@ getNumberSamples()</label>
 		<transition>
 			<source ref="id152"/>
 			<target ref="id154"/>
-			<label kind="guard" x="-646" y="-544">x &gt;= codec_latency</label>
-			<label kind="assignment" x="-646" y="-527">x = 0,
+			<label kind="guard" x="-654" y="-544">x &gt;= codec_latency</label>
+			<label kind="assignment" x="-654" y="-527">x = 0,
 uart_latency = getUARTTime()</label>
 		</transition>
 		<transition>
 			<source ref="id155"/>
 			<target ref="id153"/>
-			<label kind="assignment" x="-1139" y="-612">x = 0</label>
+			<label kind="assignment" x="-1147" y="-612">x = 0</label>
 		</transition>
 		<transition>
 			<source ref="id153"/>
@@ -3656,8 +3668,8 @@ usr_1, usr_1sl, usr_1c, usr_1j, usr_1lt, usr_1sm, usr_1ip,
 usr_2, usr_2sl, usr_2c, usr_2j, usr_2s, usr_2sm, usr_2ip,
 usr_3, usr_3sl, usr_3c, usr_3j, usr_3lt, usr_3s, usr_3sm, usr_3ip,
 usr_4, usr_4sl, usr_4c, usr_4j, usr_4lt, usr_4s, usr_4sm, usr_4ip,
-usr_5, usr_5sl, usr_5c, usr_5j, usr_5lt, usr_5s, usr_5sm, usr_5ip,
-usr_6, usr_6sl, usr_6c, usr_6j, usr_6lt, usr_6s, usr_6sm, usr_6ip,
+usr_5, usr_5sl, usr_5c, usr_5j, usr_5lt, usr_5s, usr_5sm, usr_5ip;
+/*usr_6, usr_6sl, usr_6c, usr_6j, usr_6lt, usr_6s, usr_6sm, usr_6ip,
 usr_7, usr_7sl, usr_7c, usr_7j, usr_7lt, usr_7s, usr_7sm, usr_7ip,
 usr_8, usr_8sl, usr_8c, usr_8j, usr_8lt, usr_8s, usr_8sm, usr_8ip,
 usr_9, usr_9sl, usr_9c, usr_9j, usr_9lt, usr_9s, usr_9sm, usr_9ip,
@@ -3670,7 +3682,7 @@ usr_15, usr_15sl, usr_15c, usr_15j, usr_15lt, usr_15s, usr_15sm, usr_15ip,
 usr_16, usr_16sl, usr_16c, usr_16j, usr_16lt, usr_16s, usr_16sm, usr_16ip,
 usr_17, usr_17sl, usr_17c, usr_17j, usr_17lt, usr_17s, usr_17sm, usr_17ip,
 usr_18, usr_18sl, usr_18c, usr_18j, usr_18lt, usr_18s, usr_18sm, usr_18ip,
-usr_19, usr_19sl, usr_19c, usr_19j, usr_19lt, usr_19s, usr_19sm, usr_19ip;</system>
+usr_19, usr_19sl, usr_19c, usr_19j, usr_19lt, usr_19s, usr_19sm, usr_19ip;*/</system>
 	<queries>
 		<query>
 			<formula>E&lt;&gt; ( bs_1.TRANSMIT_BCH and bs_1s.INITIAL and bs_1ip.INITIAL and bs_2.TRANSMIT_BCH and bs_2s.INITIAL and bs_2ip.INITIAL and usr_1.ON and usr_1s.INITIAL and usr_1c.INITIAL and usr_1j.INITIAL and usr_1lt.INITIAL and usr_1sm.INITIAL )</formula>
@@ -3713,7 +3725,7 @@ usr_19, usr_19sl, usr_19c, usr_19j, usr_19lt, usr_19s, usr_19sm, usr_19ip;</syst
 			<comment></comment>
 		</query>
 		<query>
-			<formula>E [&lt;= 1000000; 1] (max: sum(i: UEid_t) sleep_percent[i])</formula>
+			<formula>E [&lt;= 2000000; 1] (max: sum(i: UEid_t) sleep_percent[i])</formula>
 			<comment></comment>
 		</query>
 		<query>
