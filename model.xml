@@ -1156,9 +1156,9 @@ int getUARTTime()
 			<name x="-272" y="43">INITIAL</name>
 			<label kind="invariant" x="-272" y="59">x' == 0</label>
 		</location>
-		<location id="id16" x="170" y="238" color="#ff00ff">
-			<name x="128" y="255">PROCESS_INTERNAL</name>
-			<label kind="invariant" x="128" y="272">x &lt;= internal_processing</label>
+		<location id="id16" x="170" y="162" color="#ff00ff">
+			<name x="128" y="179">PROCESS_INTERNAL</name>
+			<label kind="invariant" x="128" y="196">x &lt;= internal_processing</label>
 		</location>
 		<location id="id17" x="170" y="-59">
 			<name x="187" y="-67">TRANSFER_AES</name>
@@ -1176,24 +1176,24 @@ int getUARTTime()
 			<name x="-307" y="-178">PROCESS_CENTRAL_BASE</name>
 			<label kind="invariant" x="-264" y="-161">x &lt;= cb_processing</label>
 		</location>
-		<location id="id21" x="-212" y="238">
-			<name x="-272" y="255">TRANSFER_UART</name>
-			<label kind="invariant" x="-263" y="272">x' == 1 &amp;&amp;
+		<location id="id21" x="-212" y="162">
+			<name x="-272" y="179">TRANSFER_UART</name>
+			<label kind="invariant" x="-263" y="196">x' == 1 &amp;&amp;
 x &lt;= uart_latency</label>
-			<label kind="comments" x="-280" y="314">QCA to host processor</label>
+			<label kind="comments" x="-280" y="238">QCA to host processor</label>
 		</location>
 		<init ref="id15"/>
 		<transition>
 			<source ref="id21"/>
 			<target ref="id16"/>
-			<label kind="guard" x="-76" y="238">x &gt;= uart_latency</label>
-			<label kind="assignment" x="-76" y="255">x = 0</label>
+			<label kind="guard" x="-76" y="162">x &gt;= uart_latency</label>
+			<label kind="assignment" x="-76" y="179">x = 0</label>
 		</transition>
 		<transition>
 			<source ref="id20"/>
 			<target ref="id15"/>
-			<label kind="guard" x="-204" y="-68">x &gt;= cb_processing</label>
-			<label kind="assignment" x="-204" y="-51">x = 0,
+			<label kind="guard" x="-204" y="-93">x &gt;= cb_processing</label>
+			<label kind="assignment" x="-204" y="-76">x = 0,
 BS_processing[bs] = 0</label>
 		</transition>
 		<transition>
@@ -1205,8 +1205,8 @@ BS_processing[bs] = 0</label>
 		<transition>
 			<source ref="id19"/>
 			<target ref="id15"/>
-			<label kind="guard" x="-42" y="26">!isAudio</label>
-			<label kind="assignment" x="-42" y="51">x = 0,
+			<label kind="guard" x="-42" y="-8">!isAudio</label>
+			<label kind="assignment" x="-42" y="8">x = 0,
 BS_processing[bs] = 0</label>
 			<nail x="0" y="51"/>
 		</transition>
@@ -1233,10 +1233,10 @@ isAudio = getDataType()</label>
 		<transition>
 			<source ref="id15"/>
 			<target ref="id21"/>
-			<label kind="synchronisation" x="-204" y="110">BS_process[bs]?</label>
-			<label kind="assignment" x="-204" y="127">x = 0,
+			<label kind="synchronisation" x="-204" y="68">BS_process[bs]?</label>
+			<label kind="assignment" x="-204" y="85">x = 0,
 uart_latency = getUARTTime(),
-BS_processing[bs] = 10</label>
+BS_processing[bs] = 1</label>
 		</transition>
 	</template>
 	<template>
@@ -3228,24 +3228,6 @@ x &lt;= getLatency(id)</label>
 		</branchpoint>
 		<init ref="id129"/>
 		<transition>
-			<source ref="id154"/>
-			<target ref="id136"/>
-			<label kind="probability" x="-816" y="-833">100 - prob_success</label>
-			<nail x="-824" y="-892"/>
-		</transition>
-		<transition>
-			<source ref="id155"/>
-			<target ref="id145"/>
-			<label kind="probability" x="-1241" y="-255">100 -
-prob_success</label>
-		</transition>
-		<transition>
-			<source ref="id153"/>
-			<target ref="id144"/>
-			<label kind="probability" x="-1300" y="-306">100 - prob_success</label>
-			<nail x="-1156" y="-280"/>
-		</transition>
-		<transition>
 			<source ref="id152"/>
 			<target ref="id147"/>
 			<label kind="guard" x="-1130" y="-501">frame_clk[bs] + qca_latency &gt;=
@@ -3357,7 +3339,7 @@ z = 0</label>
 		<transition>
 			<source ref="id153"/>
 			<target ref="id146"/>
-			<label kind="probability" x="-1411" y="-314">prob_success</label>
+			<label kind="probability" x="-1351" y="-314">100</label>
 		</transition>
 		<transition>
 			<source ref="id145"/>
@@ -3376,7 +3358,7 @@ z = 0</label>
 			<source ref="id154"/>
 			<target ref="id134"/>
 			<label kind="assignment" x="-816" y="-714">slot = getSlot(bs, id)</label>
-			<label kind="probability" x="-816" y="-731">prob_success</label>
+			<label kind="probability" x="-816" y="-731">100</label>
 		</transition>
 		<transition>
 			<source ref="id149"/>
@@ -3433,7 +3415,7 @@ slots[bs][slot].start</label>
 			<target ref="id145"/>
 			<label kind="synchronisation" x="-1232" y="-127">UTCH[ch][id]!</label>
 			<label kind="assignment" x="-1232" y="-110">x = 0</label>
-			<label kind="probability" x="-1232" y="-144">prob_success</label>
+			<label kind="probability" x="-1232" y="-144">100</label>
 			<nail x="-1156" y="-144"/>
 			<nail x="-1232" y="-144"/>
 		</transition>
