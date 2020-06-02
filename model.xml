@@ -123,7 +123,8 @@ slot_t slots[BSid_t][slotID_t] = {
 
 // CONSTANTS ----------------------------------------------------------------------------------
 
-const profileId_t static_profile[UEid_t] = {3, 4, 4, 4, 3, 3, 1, 1, 1, 1, 3, 4, 4, 4, 3, 3, 1, 1, 1, 1};    // profiles of the UEs - can be negotiated with the BS
+const profileId_t static_profile[UEid_t] = {3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3};    // profiles of the UEs - can be negotiated with the BS
+//{1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1}
 
 const int UL_audio_size = 41;    // UL slot audio size: audio (40B) + checksum (1B) (in Bytes)
 
@@ -3664,9 +3665,9 @@ bs_1clk, bs_1s, bs_1ip,
 //bs_2, bs_2clk, bs_2s, bs_2ip,
 usr_1, usr_1sl, usr_1c, usr_1j, usr_1lt, usr_1sm, usr_1ip,
 usr_2, usr_2sl, usr_2c, usr_2j, usr_2s, usr_2sm, usr_2ip,
-usr_3, usr_3sl, usr_3c, usr_3j, usr_3lt, usr_3s, usr_3sm, usr_3ip;
-/*usr_4, usr_4sl, usr_4c, usr_4j, usr_4lt, usr_4s, usr_4sm, usr_4ip,
-usr_5, usr_5sl, usr_5c, usr_5j, usr_5lt, usr_5s, usr_5sm, usr_5ip;
+usr_3, usr_3sl, usr_3c, usr_3j, usr_3lt, usr_3s, usr_3sm, usr_3ip,
+usr_4, usr_4sl, usr_4c, usr_4j, usr_4lt, usr_4s, usr_4sm, usr_4ip,
+usr_5, usr_5sl, usr_5c, usr_5j, usr_5lt, usr_5s, usr_5sm, usr_5ip,
 usr_6, usr_6sl, usr_6c, usr_6j, usr_6lt, usr_6s, usr_6sm, usr_6ip,
 usr_7, usr_7sl, usr_7c, usr_7j, usr_7lt, usr_7s, usr_7sm, usr_7ip,
 usr_8, usr_8sl, usr_8c, usr_8j, usr_8lt, usr_8s, usr_8sm, usr_8ip,
@@ -3680,7 +3681,7 @@ usr_15, usr_15sl, usr_15c, usr_15j, usr_15lt, usr_15s, usr_15sm, usr_15ip,
 usr_16, usr_16sl, usr_16c, usr_16j, usr_16lt, usr_16s, usr_16sm, usr_16ip,
 usr_17, usr_17sl, usr_17c, usr_17j, usr_17lt, usr_17s, usr_17sm, usr_17ip,
 usr_18, usr_18sl, usr_18c, usr_18j, usr_18lt, usr_18s, usr_18sm, usr_18ip,
-usr_19, usr_19sl, usr_19c, usr_19j, usr_19lt, usr_19s, usr_19sm, usr_19ip;*/</system>
+usr_19, usr_19sl, usr_19c, usr_19j, usr_19lt, usr_19s, usr_19sm, usr_19ip;</system>
 	<queries>
 		<query>
 			<formula>E&lt;&gt; ( bs_1.TRANSMIT_BCH and bs_1s.INITIAL and bs_1ip.INITIAL and bs_2.TRANSMIT_BCH and bs_2s.INITIAL and bs_2ip.INITIAL and usr_1.ON and usr_1s.INITIAL and usr_1c.INITIAL and usr_1j.INITIAL and usr_1lt.INITIAL and usr_1sm.INITIAL )</formula>
@@ -3723,7 +3724,7 @@ usr_19, usr_19sl, usr_19c, usr_19j, usr_19lt, usr_19s, usr_19sm, usr_19ip;*/</sy
 			<comment></comment>
 		</query>
 		<query>
-			<formula>E [&lt;= 2000000; 1] (max: sum(i: UEid_t) sleep_percent[i])</formula>
+			<formula>E [&lt;= 200000000; 1] (max: sum(i: UEid_t) sleep_percent[i])</formula>
 			<comment></comment>
 		</query>
 		<query>
