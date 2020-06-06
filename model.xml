@@ -2677,7 +2677,7 @@ offset &lt;= start_offsets[id]</label>
 // CONSTANTS
 // --------------------------------------------------------------------------------------------
 
-const int qca_latency = 50;    // QCA processing time (in us)
+const int qca_latency = 0;    // QCA processing time (in us)
 
 const int uart_speed = 1000;    // uart transmission speed (in kbit/s)
 
@@ -2709,10 +2709,11 @@ int slot;
 // --------------------------------------------------------------------------------------------
 // FUNCTIONS
 // --------------------------------------------------------------------------------------------
-
-int getUARTTime()
+int24_t time;
+int24_t getUARTTime()
 {
-    return getULAudioData(id)/(uart_speed/1000);
+    time = (samples_ready[id] * 16)/(UE_uart_speed[id]);
+    return time;
 }
 
 int getDisconnect()
@@ -2745,8 +2746,9 @@ z' == 0</label>
 			<name x="-901" y="-459">PREPARE</name>
 			<urgent/>
 		</location>
-		<location id="id112" x="-986" y="-433" color="#ffa500">
-			<name x="-1020" y="-467">TRANSFER</name>
+		<location id="id112" x="-986" y="-433">
+			<name x="-1020" y="-484">TRANSFER</name>
+			<label kind="invariant" x="-1011" y="-467">z &lt;= time</label>
 		</location>
 		<location id="id113" x="-960" y="-238" color="#6c3483">
 			<name x="-1003" y="-221">TRANSMIT</name>
@@ -2932,7 +2934,7 @@ z = 0</label>
 			<source ref="id133"/>
 			<target ref="id114"/>
 			<label kind="assignment" x="-816" y="-722">slot = getSlot(bs, id)</label>
-			<label kind="probability" x="-816" y="-739">prob_success</label>
+			<label kind="probability" x="-816" y="-739">100</label>
 		</transition>
 		<transition>
 			<source ref="id129"/>
@@ -2952,14 +2954,17 @@ ch = getCh(id, ch)</label>
 		<transition>
 			<source ref="id112"/>
 			<target ref="id115"/>
-			<label kind="guard" x="-1037" y="-340">frame_clk[bs] + qca_latency &lt;
+			<label kind="guard" x="-1071" y="-357">z &gt; time &amp;&amp;
+frame_clk[bs] + qca_latency &lt;
 slots[bs][slot].start</label>
+			<label kind="assignment" x="-1071" y="-374">z = 0</label>
 			<nail x="-986" y="-340"/>
 		</transition>
 		<transition>
 			<source ref="id112"/>
 			<target ref="id127"/>
-			<label kind="guard" x="-1147" y="-510">frame_clk[bs] + qca_latency &gt;=
+			<label kind="guard" x="-1147" y="-527">z &gt;= time &amp;&amp;
+frame_clk[bs] + qca_latency &gt;=
 slots[bs][slot].start</label>
 			<nail x="-1156" y="-433"/>
 		</transition>
@@ -3002,7 +3007,7 @@ slots[bs][slot].start</label>
 			<target ref="id125"/>
 			<label kind="synchronisation" x="-1215" y="-161">UTCH[ch][id]!</label>
 			<label kind="assignment" x="-1215" y="-144">x = 0</label>
-			<label kind="probability" x="-1215" y="-178">prob_success</label>
+			<label kind="probability" x="-1215" y="-178">100</label>
 			<nail x="-1130" y="-178"/>
 			<nail x="-1215" y="-178"/>
 		</transition>
@@ -3031,6 +3036,8 @@ getCQI(id, bs)</label>
 			<source ref="id111"/>
 			<target ref="id112"/>
 			<label kind="guard" x="-960" y="-433">samples_ready[id]</label>
+			<label kind="assignment" x="-960" y="-416">z = 0,
+getUARTTime()</label>
 		</transition>
 		<transition>
 			<source ref="id110"/>
