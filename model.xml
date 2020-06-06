@@ -94,7 +94,7 @@ typedef struct {
     int type;    // 0 - BCH, 1 - RACH, 2 - UL, 3 - ACK
 } slot_t;
 
-typedef int [0, number_UE + 3] slotID_t;
+typedef int [0, (2 * number_UE) + 1] slotID_t;
 
 slot_t slots[BSid_t][slotID_t] = {
     {{-1, -1, -1, -1, -1, -1}, {-1, -1, -1, -1, -1, -1}, {-1, -1, -1, -1, -1, -1},
@@ -104,8 +104,20 @@ slot_t slots[BSid_t][slotID_t] = {
      {-1, -1, -1, -1, -1, -1}, {-1, -1, -1, -1, -1, -1}, {-1, -1, -1, -1, -1, -1},
      {-1, -1, -1, -1, -1, -1}, {-1, -1, -1, -1, -1, -1}, {-1, -1, -1, -1, -1, -1},
      {-1, -1, -1, -1, -1, -1}, {-1, -1, -1, -1, -1, -1}, {-1, -1, -1, -1, -1, -1},
+     {-1, -1, -1, -1, -1, -1}, {-1, -1, -1, -1, -1, -1}, {-1, -1, -1, -1, -1, -1},
+     {-1, -1, -1, -1, -1, -1}, {-1, -1, -1, -1, -1, -1}, {-1, -1, -1, -1, -1, -1},
+     {-1, -1, -1, -1, -1, -1}, {-1, -1, -1, -1, -1, -1}, {-1, -1, -1, -1, -1, -1},
+     {-1, -1, -1, -1, -1, -1}, {-1, -1, -1, -1, -1, -1}, {-1, -1, -1, -1, -1, -1},
+     {-1, -1, -1, -1, -1, -1}, {-1, -1, -1, -1, -1, -1}, {-1, -1, -1, -1, -1, -1},
+     {-1, -1, -1, -1, -1, -1}, {-1, -1, -1, -1, -1, -1}, {-1, -1, -1, -1, -1, -1},
      {-1, -1, -1, -1, -1, -1}, {-1, -1, -1, -1, -1, -1}, {-1, -1, -1, -1, -1, -1}},
     {{-1, -1, -1, -1, -1, -1}, {-1, -1, -1, -1, -1, -1}, {-1, -1, -1, -1, -1, -1},
+     {-1, -1, -1, -1, -1, -1}, {-1, -1, -1, -1, -1, -1}, {-1, -1, -1, -1, -1, -1},
+     {-1, -1, -1, -1, -1, -1}, {-1, -1, -1, -1, -1, -1}, {-1, -1, -1, -1, -1, -1},
+     {-1, -1, -1, -1, -1, -1}, {-1, -1, -1, -1, -1, -1}, {-1, -1, -1, -1, -1, -1},
+     {-1, -1, -1, -1, -1, -1}, {-1, -1, -1, -1, -1, -1}, {-1, -1, -1, -1, -1, -1},
+     {-1, -1, -1, -1, -1, -1}, {-1, -1, -1, -1, -1, -1}, {-1, -1, -1, -1, -1, -1},
+     {-1, -1, -1, -1, -1, -1}, {-1, -1, -1, -1, -1, -1}, {-1, -1, -1, -1, -1, -1},
      {-1, -1, -1, -1, -1, -1}, {-1, -1, -1, -1, -1, -1}, {-1, -1, -1, -1, -1, -1},
      {-1, -1, -1, -1, -1, -1}, {-1, -1, -1, -1, -1, -1}, {-1, -1, -1, -1, -1, -1},
      {-1, -1, -1, -1, -1, -1}, {-1, -1, -1, -1, -1, -1}, {-1, -1, -1, -1, -1, -1},
@@ -1246,7 +1258,7 @@ uart_latency = getUARTTime()</label>
 
 int j = 0;
 Node_t ue;
-int UL_duration = 0;
+int24_t UL_duration = 0;
 int ACK_duration = 0;
 int slot_count = 2;    // initial number of slots: BCH and RACH
 int slot_start = 0;
@@ -1297,7 +1309,7 @@ void processQueue(Queue_t queue, bool audio)
 	        int duration;
 	        ue = getFirst(queue);
 
-            if(!retransmission[ue.id])
+            if(!retransmission[bs])
             {
 	            if(audio)
 	                duration = getULAudioDuration(ue.id);
@@ -1306,8 +1318,8 @@ void processQueue(Queue_t queue, bool audio)
     
     	        temp_GI = ((transmission_duration - (slots[bs][0].size + (UL_duration + duration) + ACK_duration + RACH_size[bs] + channel_switch/2))/(slot_count + 2));
 	            // verify GI size
-	            if(!verifyGI(temp_GI))
-	                return;
+	            //if(!verifyGI(temp_GI))
+	            //    return;
 
     	        // UL
                 setSlot(j++, ue.id, slot_start, duration, 0, 3, 2);
@@ -1321,7 +1333,7 @@ void processQueue(Queue_t queue, bool audio)
                 UL_duration += ACK_duration;
                 setSlot(j++, -1, slot_start, slot_size, 0, 5, 3);
 	            slot_start += slot_size;
-                slot_count += 1;
+                slot_count++;
             }
 
             if(queue.size &gt; 1)
@@ -1357,6 +1369,7 @@ void scheduleFrame()
     j = 0;
     slot_count = 2;
     slot_start = 0;
+    UL_duration = 0;
     transmission_duration = frame_size[bs]/2;
     
     resetSlots();
@@ -1394,7 +1407,7 @@ void scheduleFrame()
 
     if(slot_count &gt; 2)
     {
-        GI_size[bs] = ((transmission_duration - (slots[bs][0].size + RACH_size[bs] + channel_switch/2))/slot_count) - 5;
+        GI_size[bs] = ((transmission_duration - (slots[bs][0].size + RACH_size[bs] + UL_duration + channel_switch/2))/slot_count) - 5;
     }
 
     for(i = 1; i &lt; number_slots[bs]; i++)
@@ -2724,7 +2737,7 @@ int getDisconnect()
 
 void samplesLost()
 {
-    samples_lost[id] += samples_ready[id];
+    //samples_lost[id] += samples_ready[id];
 }
 
 // --------------------------------------------------------------------------------------------
@@ -3161,6 +3174,7 @@ int requestStart()
 			<label kind="invariant" x="-3349" y="-2805">x &lt;= scan_lat</label>
 		</location>
 		<location id="id138" x="-3238" y="-3000">
+			<name x="-3248" y="-3034">B</name>
 			<urgent/>
 		</location>
 		<location id="id139" x="-2626" y="-3153">
@@ -3196,6 +3210,7 @@ int requestStart()
 			<urgent/>
 		</location>
 		<location id="id147" x="-2839" y="-2847">
+			<name x="-2849" y="-2881">C</name>
 			<urgent/>
 		</location>
 		<location id="id148" x="-3043" y="-3000">
@@ -3203,6 +3218,7 @@ int requestStart()
 			<label kind="invariant" x="-3102" y="-3034">x &lt;= channel_switch</label>
 		</location>
 		<location id="id149" x="-3459" y="-2915">
+			<name x="-3469" y="-2949">A</name>
 			<urgent/>
 		</location>
 		<branchpoint id="id150" x="-2839" y="-2779">
@@ -3773,7 +3789,7 @@ usr_19, usr_19sl, usr_19c, usr_19j, usr_19lt, usr_19s, usr_19sm, usr_19ip;</syst
 			<comment></comment>
 		</query>
 		<query>
-			<formula>E[&lt;=100000000; 1] (max: sum(i:UEid_t) sleep_percent[i])</formula>
+			<formula>E[&lt;=200000000; 5] (max: sum(i:UEid_t) sleep_percent[i])</formula>
 			<comment></comment>
 		</query>
 		<query>
