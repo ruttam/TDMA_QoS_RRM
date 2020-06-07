@@ -1288,14 +1288,12 @@ bool verifyGI(int temp_GI)
 
 void setSlot(int i, int id, int start, int size, int data, int mcs, int type)
 {
-    if(i &lt; number_UE + 3){
         slots[bs][i].owner = id;
         slots[bs][i].start = start;
         slots[bs][i].size = size;
         slots[bs][i].data = data;
         slots[bs][i].MCS = mcs;
         slots[bs][i].type = type;
-    }
 }
 
 void processQueue(Queue_t queue, bool audio)
@@ -1585,8 +1583,8 @@ void getSwitchTime()
 			<urgent/>
 		</location>
 		<location id="id34" x="-722" y="-468" color="#ffa500">
-			<name x="-705" y="-493">WAIT_UL</name>
-			<label kind="invariant" x="-705" y="-476">x &lt;= slots[bs][slot].size</label>
+			<name x="-705" y="-484">WAIT_UL</name>
+			<label kind="invariant" x="-697" y="-467">x &lt;= slots[bs][slot].size</label>
 		</location>
 		<location id="id35" x="-842" y="-850">
 			<name x="-852" y="-884">B</name>
@@ -1752,9 +1750,10 @@ profile[ue] != 0</label>
 		<transition>
 			<source ref="id43"/>
 			<target ref="id34"/>
-			<label kind="guard" x="-705" y="-552">slots[bs][slot].type != dl &amp;&amp;
+			<label kind="guard" x="-714" y="-561">slots[bs][slot].type != dl &amp;&amp;
 frame_clk[bs] &gt;= slots[bs][slot].start</label>
-			<label kind="assignment" x="-705" y="-518">x = 0</label>
+			<label kind="assignment" x="-714" y="-527">x = 0,
+ue = slots[bs][slot].owner</label>
 		</transition>
 		<transition>
 			<source ref="id42"/>
@@ -2726,7 +2725,7 @@ int slot;    // dedicated slot index
 int24_t time;
 int24_t getUARTTime()
 {
-    time = (samples_ready[id] * 16)/(UE_uart_speed[id]);
+    time = samples_ready[id];
     return time;
 }
 
@@ -3218,7 +3217,7 @@ int requestStart()
 			<label kind="invariant" x="-3102" y="-3034">x &lt;= channel_switch</label>
 		</location>
 		<location id="id149" x="-3459" y="-2915">
-			<name x="-3469" y="-2949">A</name>
+			<name x="-3468" y="-2898">A</name>
 			<urgent/>
 		</location>
 		<branchpoint id="id150" x="-2839" y="-2779">
@@ -3279,7 +3278,8 @@ x &gt;= channel_switch</label>
 		<transition>
 			<source ref="id138"/>
 			<target ref="id148"/>
-			<label kind="assignment" x="-3170" y="-3000">x = 0</label>
+			<label kind="guard" x="-3204" y="-3000">j &lt; number_retries</label>
+			<label kind="assignment" x="-3204" y="-2983">x = 0</label>
 		</transition>
 		<transition>
 			<source ref="id141"/>
@@ -3356,7 +3356,7 @@ j = 0</label>
 			<source ref="id149"/>
 			<target ref="id138"/>
 			<label kind="guard" x="-3493" y="-3077">i &lt; number_channels</label>
-			<label kind="assignment" x="-3493" y="-3060">i++, x = 0</label>
+			<label kind="assignment" x="-3493" y="-3060">i++</label>
 			<nail x="-3493" y="-2915"/>
 			<nail x="-3493" y="-3034"/>
 			<nail x="-3349" y="-3034"/>
@@ -3689,12 +3689,12 @@ bs_2s = Scheduler(1);
 bs_2ip = InternalBSProcessing(1);
 
 // List one or more processes to be composed into a system.
-system bs_1, usr_1s, usr_2lt,
-bs_1clk, bs_1s, bs_1ip,
+system bs_1, usr_1s, usr_2s, usr_3s,
+bs_1clk, bs_1s, bs_1ip, usr_2lt,
 //bs_2, bs_2clk, bs_2s, bs_2ip,
 usr_1, usr_1sl, usr_1c, usr_1j, usr_1lt, usr_1sm, usr_1ip,
-usr_2, usr_2sl, usr_2c, usr_2j, usr_2s, usr_2sm, usr_2ip,
-usr_3, usr_3sl, usr_3c, usr_3j, usr_3lt, usr_3s, usr_3sm, usr_3ip,
+usr_2, usr_2sl, usr_2c, usr_2j, usr_2sm, usr_2ip,
+usr_3, usr_3sl, usr_3c, usr_3j, usr_3lt, usr_3sm, usr_3ip,
 usr_4, usr_4sl, usr_4c, usr_4j, usr_4lt, usr_4s, usr_4sm, usr_4ip,
 usr_5, usr_5sl, usr_5c, usr_5j, usr_5lt, usr_5s, usr_5sm, usr_5ip,
 usr_6, usr_6sl, usr_6c, usr_6j, usr_6lt, usr_6s, usr_6sm, usr_6ip,
@@ -3789,7 +3789,7 @@ usr_19, usr_19sl, usr_19c, usr_19j, usr_19lt, usr_19s, usr_19sm, usr_19ip;</syst
 			<comment></comment>
 		</query>
 		<query>
-			<formula>E[&lt;=200000000; 5] (max: sum(i:UEid_t) sleep_percent[i])</formula>
+			<formula>E[&lt;=200000000; 1] (max: sum(i:UEid_t) sleep_percent[i])</formula>
 			<comment></comment>
 		</query>
 		<query>
