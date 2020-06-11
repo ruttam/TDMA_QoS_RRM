@@ -843,7 +843,7 @@ no need for extra scheduling.</label>
 		<transition>
 			<source ref="id10"/>
 			<target ref="id7"/>
-			<label kind="synchronisation" x="-1020" y="-544">retransmit_ready[bs]!</label>
+			<label kind="synchronisation" x="-1020" y="-544">transmit_ready[bs]!</label>
 			<nail x="-1028" y="-518"/>
 		</transition>
 		<transition>
@@ -1072,6 +1072,12 @@ x &lt;= GI_size[bs]</label>
 		</branchpoint>
 		<init ref="id16"/>
 		<transition>
+			<source ref="id34"/>
+			<target ref="id26"/>
+			<nail x="-484" y="-688"/>
+			<nail x="-790" y="-688"/>
+		</transition>
+		<transition>
 			<source ref="id33"/>
 			<target ref="id23"/>
 			<label kind="assignment" x="-1258" y="-765">slot += 1</label>
@@ -1087,12 +1093,6 @@ profile[ue] != 0</label>
 		<transition>
 			<source ref="id24"/>
 			<target ref="id32"/>
-		</transition>
-		<transition>
-			<source ref="id31"/>
-			<target ref="id17"/>
-			<label kind="synchronisation" x="-331" y="-850">retransmit_ready[bs]?</label>
-			<nail x="-323" y="-850"/>
 		</transition>
 		<transition>
 			<source ref="id31"/>
@@ -1178,7 +1178,7 @@ ue = RACH_id[bs]</label>
 		</transition>
 		<transition>
 			<source ref="id22"/>
-			<target ref="id23"/>
+			<target ref="id33"/>
 		</transition>
 		<transition>
 			<source ref="id21"/>
@@ -1194,9 +1194,8 @@ RACH_id[bs] = -1</label>
 		<transition>
 			<source ref="id19"/>
 			<target ref="id22"/>
-			<label kind="guard" x="-1071" y="-578">x &gt;= slot_size[bs][ue]</label>
-			<label kind="assignment" x="-1071" y="-560">slot += 1,
-x = 0</label>
+			<label kind="guard" x="-1071" y="-561">x &gt;= slot_size[bs][ue]</label>
+			<label kind="assignment" x="-1071" y="-544">x = 0</label>
 		</transition>
 		<transition>
 			<source ref="id19"/>
@@ -1321,6 +1320,12 @@ z &lt;= disconnect_timeout</label>
 		</branchpoint>
 		<init ref="id35"/>
 		<transition>
+			<source ref="id46"/>
+			<target ref="id39"/>
+			<label kind="probability" x="-1606" y="-1632">100 - prob_success</label>
+			<nail x="-1555" y="-1615"/>
+		</transition>
+		<transition>
 			<source ref="id36"/>
 			<target ref="id43"/>
 		</transition>
@@ -1335,7 +1340,7 @@ z &lt;= disconnect_timeout</label>
 			<target ref="id39"/>
 			<label kind="synchronisation" x="-1445" y="-1589">UCCH[bs][id]!</label>
 			<label kind="assignment" x="-1445" y="-1572">x = 0</label>
-			<label kind="probability" x="-1445" y="-1606">1</label>
+			<label kind="probability" x="-1445" y="-1606">prob_success</label>
 			<nail x="-1453" y="-1538"/>
 		</transition>
 		<transition>
@@ -1497,6 +1502,13 @@ void getProbability()
 		</branchpoint>
 		<init ref="id49"/>
 		<transition>
+			<source ref="id59"/>
+			<target ref="id52"/>
+			<label kind="probability" x="340" y="68">100 - prob_success</label>
+			<nail x="382" y="93"/>
+			<nail x="382" y="161"/>
+		</transition>
+		<transition>
 			<source ref="id58"/>
 			<target ref="id53"/>
 			<label kind="synchronisation" x="493" y="408">disconnected[id]!</label>
@@ -1558,7 +1570,7 @@ static_profile[id] == HqRTa</label>
 			<target ref="id52"/>
 			<label kind="synchronisation" x="493" y="178">UCCH[bs][id]!</label>
 			<label kind="assignment" x="493" y="195">x = 0</label>
-			<label kind="probability" x="493" y="161">1</label>
+			<label kind="probability" x="493" y="161">prob_success</label>
 		</transition>
 		<transition>
 			<source ref="id54"/>
@@ -1585,7 +1597,8 @@ channel = broadcast_channel[bs]</label>
 			<source ref="id51"/>
 			<target ref="id54"/>
 			<label kind="guard" x="731" y="93">x &gt;= slot_start[bs][id]</label>
-			<label kind="assignment" x="731" y="110">x = 0</label>
+			<label kind="assignment" x="731" y="110">x = 0,
+getProbability()</label>
 		</transition>
 		<transition>
 			<source ref="id52"/>
@@ -1895,6 +1908,11 @@ x &lt;= getLatency(id)</label>
 		</branchpoint>
 		<init ref="id68"/>
 		<transition>
+			<source ref="id84"/>
+			<target ref="id81"/>
+			<label kind="probability" x="-1130" y="-680">100 - prob_success</label>
+		</transition>
+		<transition>
 			<source ref="id83"/>
 			<target ref="id75"/>
 			<label kind="guard" x="-518" y="-892">frame_clk[bs] + qca_latency &lt; slot_start[bs][id]</label>
@@ -1914,7 +1932,7 @@ x &lt;= getLatency(id)</label>
 		<transition>
 			<source ref="id81"/>
 			<target ref="id80"/>
-			<label kind="guard" x="-1275" y="-705">!retransmission[bs]</label>
+			<label kind="guard" x="-1258" y="-739">!retransmission[bs]</label>
 			<nail x="-1147" y="-714"/>
 		</transition>
 		<transition>
@@ -1967,7 +1985,7 @@ channel = broadcast_channel[bs]</label>
 			<target ref="id80"/>
 			<label kind="synchronisation" x="-977" y="-713">UTCH[bs][id]!</label>
 			<label kind="assignment" x="-977" y="-697">transmitted = 1</label>
-			<label kind="probability" x="-977" y="-730">1</label>
+			<label kind="probability" x="-977" y="-730">prob_success</label>
 		</transition>
 		<transition>
 			<source ref="id77"/>
@@ -2158,9 +2176,16 @@ bool checkChannel(int ch_id)
 		</branchpoint>
 		<init ref="id85"/>
 		<transition>
+			<source ref="id96"/>
+			<target ref="id89"/>
+			<label kind="probability" x="-3145" y="-2601">100 - prob_success</label>
+			<nail x="-3000" y="-2575"/>
+			<nail x="-3000" y="-2618"/>
+		</transition>
+		<transition>
 			<source ref="id97"/>
 			<target ref="id93"/>
-			<label kind="probability" x="-3357" y="-2703">0</label>
+			<label kind="probability" x="-3417" y="-2703">100 - prob_stable</label>
 			<nail x="-3459" y="-2677"/>
 			<nail x="-3459" y="-2856"/>
 		</transition>
@@ -2197,8 +2222,10 @@ RACH_id[bs] != -1</label>
 		<transition>
 			<source ref="id92"/>
 			<target ref="id90"/>
-			<label kind="guard" x="-2941" y="-2473">frame_clk[bs] &gt;= RACH_start[bs]</label>
-			<label kind="assignment" x="-2856" y="-2456">x = 0</label>
+			<label kind="guard" x="-2898" y="-2465">frame_clk[bs] &gt;=
+RACH_start[bs]</label>
+			<label kind="assignment" x="-2898" y="-2431">x = 0,
+getProbability()</label>
 		</transition>
 		<transition>
 			<source ref="id89"/>
@@ -2278,10 +2305,10 @@ checkChannel(i)</label>
 		<transition>
 			<source ref="id97"/>
 			<target ref="id89"/>
-			<label kind="assignment" x="-3128" y="-2677">i = 0,
+			<label kind="assignment" x="-3153" y="-2677">i = 0,
 j = 0,
 x = 0</label>
-			<label kind="probability" x="-3128" y="-2703">1</label>
+			<label kind="probability" x="-3153" y="-2703">prob_stable</label>
 		</transition>
 		<transition>
 			<source ref="id86"/>
