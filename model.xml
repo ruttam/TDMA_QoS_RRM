@@ -2805,7 +2805,7 @@ int24_t time;
 int24_t getUARTTime()
 {
     time = samples_ready[id];
-    bytes_transmitted[id] = fint(slots[bs][slot].data/8);
+    bytes_transmitted[id] += fint(slots[bs][slot].data/8);
     return time;
 }
 
@@ -3886,7 +3886,7 @@ UserStates;</system>
 			<comment></comment>
 		</query>
 		<query>
-			<formula>E [&lt;= 200000000; 5] (max: sum(i:UEid_t) bytes_transmitted[i])</formula>
+			<formula>E [&lt;= 200000; 5] (max: sum(i:UEid_t) bytes_transmitted[i])</formula>
 			<comment></comment>
 		</query>
 		<query>
