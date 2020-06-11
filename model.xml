@@ -748,7 +748,7 @@ int getCh(UEid_t id, int ch)
 
 // CONSTANTS ----------------------------------------------------------------------------------
 
-const int speed_volume = 10000000;    // a multiply of PI value: the higher, the slower is motion
+const int speed_volume = 100000;    // a multiply of PI value: the higher, the slower is motion
 
 // VARIABLES ----------------------------------------------------------------------------------
 
@@ -771,7 +771,6 @@ void getDistances(UEid_t id)
     int i;
     double x, y;
     Point_t p;
-    BSid_t bs = getBS(id);
     // plane curves
     if(id == 0 || id == 19)
     {
@@ -840,14 +839,14 @@ void getDistances(UEid_t id)
     for(i: BSid_t)
     {
         p = BS_location[i];
-        distances[i][id] = fint(sqrt(fabs(pow(p.a - x * 100, 2) + pow(p.b - y * 100, 2))));
+        distances[i][id] = fint(sqrt(fabs(pow(p.a - x * 100, 2) + pow(p.b - y * 100, 2))))/10;
     }
 }
 
 int24_t getCQI(UEid_t id, BSid_t bs)
 {
     getDistances(id);
-    return fint(distances[bs][id] * 100/480);
+    return (distances[bs][id] * 100)/61;
 }
 
 // --------------------------------------------------------------------------------------------
@@ -2551,10 +2550,10 @@ dedicated[id]</label>
 	<template>
 		<name>LocationClock</name>
 		<declaration>// --------------------------------------------------------------------------------------------
-// CONSTANTS
+// VARIABLES
 // --------------------------------------------------------------------------------------------
 
-const double duration = 3.14159265359;</declaration>
+int24_t duration = fint(3.14159265359 * speed_volume);</declaration>
 		<location id="id96" x="-127" y="-119" color="#ffffff">
 			<urgent/>
 		</location>
@@ -3559,6 +3558,32 @@ profile[id] = initial</label>
 		</transition>
 	</template>
 	<template>
+		<name>TestLocation</name>
+		<parameter>UEid_t id</parameter>
+		<declaration>clock x;
+</declaration>
+		<location id="id151" x="-799" y="-110">
+			<label kind="invariant" x="-833" y="-93">x &lt;= 100</label>
+		</location>
+		<location id="id152" x="-799" y="-238">
+			<urgent/>
+		</location>
+		<init ref="id152"/>
+		<transition>
+			<source ref="id152"/>
+			<target ref="id151"/>
+		</transition>
+		<transition>
+			<source ref="id151"/>
+			<target ref="id151"/>
+			<label kind="guard" x="-748" y="-110">x &gt;= 100</label>
+			<label kind="assignment" x="-748" y="-93">getCQI(id, 0),
+x = 0</label>
+			<nail x="-663" y="-195"/>
+			<nail x="-663" y="-110"/>
+		</transition>
+	</template>
+	<template>
 		<name>UserSample</name>
 		<parameter>UEid_t id</parameter>
 		<declaration>// --------------------------------------------------------------------------------------------
@@ -3603,60 +3628,61 @@ void samples()
 {
     samples_ready[id] += fint((x * audio_quality[profile[id]])/bit_depth[id]/1000);
 }</declaration>
-		<location id="id151" x="-688" y="-637">
+		<location id="id153" x="-688" y="-637">
 			<name x="-714" y="-688">SAMPLE</name>
 			<label kind="invariant" x="-714" y="-671">x' == 1</label>
 		</location>
-		<location id="id152" x="-688" y="-527" color="#ff00ff">
+		<location id="id154" x="-688" y="-527" color="#ff00ff">
 			<name x="-756" y="-510">PROCESS_CODEC</name>
 			<label kind="invariant" x="-756" y="-493">x &lt;= codec_latency</label>
 		</location>
-		<location id="id153" x="-935" y="-637" color="#ffffff">
+		<location id="id155" x="-935" y="-637" color="#ffffff">
 			<name x="-960" y="-688">INITIAL</name>
 			<label kind="invariant" x="-960" y="-671">x' == 0</label>
 		</location>
-		<location id="id154" x="-340" y="-527">
+		<location id="id156" x="-340" y="-527">
 			<name x="-365" y="-510">TRANSFER</name>
 			<label kind="invariant" x="-365" y="-493">x &lt;= uart_latency</label>
 			<label kind="comments" x="-365" y="-467">Sample to memory</label>
 		</location>
-		<location id="id155" x="-935" y="-527" color="#4e342e">
+		<location id="id157" x="-935" y="-527" color="#4e342e">
 			<name x="-960" y="-510">STOP</name>
 			<label kind="testcodeEnter">Add brown color</label>
 			<urgent/>
 		</location>
-		<init ref="id153"/>
+		<init ref="id155"/>
 		<transition>
-			<source ref="id151"/>
-			<target ref="id151"/>
+			<source ref="id153"/>
+			<target ref="id153"/>
 			<label kind="synchronisation" x="-724" y="-786">prepare[id]?</label>
-			<label kind="assignment" x="-722" y="-816">samples(),
-x = 0</label>
+			<label kind="assignment" x="-722" y="-841">samples(),
+x = 0,
+getCQI(id, bs)</label>
 			<nail x="-596" y="-761"/>
 			<nail x="-775" y="-761"/>
 		</transition>
 		<transition>
-			<source ref="id151"/>
-			<target ref="id152"/>
+			<source ref="id153"/>
+			<target ref="id154"/>
 			<label kind="synchronisation" x="-680" y="-603">stop_sample[id]?</label>
 			<label kind="assignment" x="-680" y="-586">x = 0</label>
 		</transition>
 		<transition>
-			<source ref="id151"/>
-			<target ref="id155"/>
+			<source ref="id153"/>
+			<target ref="id157"/>
 			<label kind="synchronisation" x="-841" y="-552">disconnected[id]?</label>
 			<nail x="-756" y="-569"/>
 			<nail x="-901" y="-569"/>
 		</transition>
 		<transition>
-			<source ref="id151"/>
-			<target ref="id155"/>
+			<source ref="id153"/>
+			<target ref="id157"/>
 			<label kind="synchronisation" x="-901" y="-595">stop_sample[id]?</label>
 			<nail x="-731" y="-527"/>
 		</transition>
 		<transition>
-			<source ref="id154"/>
-			<target ref="id151"/>
+			<source ref="id156"/>
+			<target ref="id153"/>
 			<label kind="guard" x="-518" y="-714">x &gt;= uart_latency</label>
 			<label kind="synchronisation" x="-518" y="-697">sample_ready[id]!</label>
 			<label kind="assignment" x="-518" y="-680">x = 0,
@@ -3664,20 +3690,20 @@ sampleReady()</label>
 			<nail x="-340" y="-637"/>
 		</transition>
 		<transition>
-			<source ref="id152"/>
-			<target ref="id154"/>
+			<source ref="id154"/>
+			<target ref="id156"/>
 			<label kind="guard" x="-586" y="-527">x &gt;= codec_latency</label>
 			<label kind="assignment" x="-586" y="-510">x = 0,
 uart_latency = getUARTTime()</label>
 		</transition>
 		<transition>
-			<source ref="id155"/>
-			<target ref="id153"/>
+			<source ref="id157"/>
+			<target ref="id155"/>
 			<label kind="assignment" x="-969" y="-595">x = 0</label>
 		</transition>
 		<transition>
-			<source ref="id153"/>
-			<target ref="id151"/>
+			<source ref="id155"/>
+			<target ref="id153"/>
 			<label kind="synchronisation" x="-867" y="-714">sample[id]?</label>
 			<label kind="assignment" x="-867" y="-697">x = 0,
 bs = getBS(id),
@@ -3685,56 +3711,6 @@ getSampleTime()</label>
 		</transition>
 	</template>
 	<system>// Place template instantiations here.
-/*usr_1 = UserStates(0);
-usr_1c = UserConnect(0);
-usr_1j = UserJoined(0);
-usr_1lt = UserListenOnly(0);
-usr_1s = UserStream(0);
-usr_1sm = UserSample(0);
-usr_1sl = UserSleep(0);
-usr_1ip = InternalUEProcessing(0);
-//usr_1ct = ConnectTimer(0);
-
-usr_2 = UserStates(1);
-usr_2c = UserConnect(1);
-usr_2j = UserJoined(1);
-usr_2lt = UserListenOnly(1);
-usr_2s = UserStream(1);
-usr_2sm = UserSample(1);
-usr_2sl = UserSleep(1);
-usr_2ip = InternalUEProcessing(1);
-//usr_2ct = ConnectTimer(1);
-
-usr_3 = UserStates(2);
-usr_3c = UserConnect(2);
-usr_3j = UserJoined(2);
-usr_3lt = UserListenOnly(2);
-usr_3s = UserStream(2);
-usr_3sm = UserSample(2);
-usr_3sl = UserSleep(2);
-usr_3ip = InternalUEProcessing(2);
-//usr_3ct = ConnectTimer(2);
-
-usr_4 = UserStates(3);
-usr_4c = UserConnect(3);
-usr_4j = UserJoined(3);
-usr_4lt = UserListenOnly(3);
-usr_4s = UserStream(3);
-usr_4sm = UserSample(3);
-usr_4sl = UserSleep(3);
-usr_4ip = InternalUEProcessing(3);
-//usr_4ct = ConnectTimer(3);
-
-usr_5 = UserStates(4);
-usr_5c = UserConnect(4);
-usr_5j = UserJoined(4);
-usr_5lt = UserListenOnly(4);
-usr_5s = UserStream(4);
-usr_5sm = UserSample(4);
-usr_5sl = UserSleep(4);
-usr_5ip = InternalUEProcessing(4);
-//usr_5ct = ConnectTimer(4);*/
-
 bs_1 = BaseStation(0);
 bs_1clk = FrameClock(0);
 bs_1s = Scheduler(0);
@@ -3748,7 +3724,7 @@ bs_2ip = InternalBSProcessing(1);
 // List one or more processes to be composed into a system.
 system bs_1, bs_1clk, bs_1s, bs_1ip,
 //bs_2, bs_2clk, bs_2s, bs_2ip,
-UserStates, UserConnect, UserStream, UserSample, UserSleep, InternalUEProcessing, ConnectTimer; //usr_5ct;</system>
+UserStates, UserConnect, UserStream, UserSample, UserSleep, InternalUEProcessing, ConnectTimer, LocationClock, TestLocation;</system>
 	<queries>
 		<query>
 			<formula>E&lt;&gt; ( bs_1.TRANSMIT_BCH and bs_1s.INITIAL and bs_1ip.INITIAL and bs_2.TRANSMIT_BCH and bs_2s.INITIAL and bs_2ip.INITIAL and usr_1.ON and usr_1s.INITIAL and usr_1c.INITIAL and usr_1j.INITIAL and usr_1lt.INITIAL and usr_1sm.INITIAL )</formula>
@@ -3807,7 +3783,11 @@ UserStates, UserConnect, UserStream, UserSample, UserSleep, InternalUEProcessing
 			<comment></comment>
 		</query>
 		<query>
-			<formula>E [&lt;= 2000000; 5] (max: sum(i:UEid_t) samples_discarded[i])</formula>
+			<formula>E [&lt;= 20000000; 5] (max: sum(i:UEid_t) samples_discarded[i])</formula>
+			<comment></comment>
+		</query>
+		<query>
+			<formula>simulate [&lt;= 1000000; 1] {distances[0][0], distances[0][1], distances[0][2], distances[0][3], distances[0][4], distances[0][5], distances[0][6], distances[0][7], distances[0][8], distances[0][9], distances[0][10], distances[0][11], distances[0][12], distances[0][13], distances[0][14], distances[0][15], distances[0][16], distances[0][17], distances[0][18], distances[0][19]}</formula>
 			<comment></comment>
 		</query>
 		<query>
