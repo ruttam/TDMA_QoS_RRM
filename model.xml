@@ -14,7 +14,7 @@ const int unit = 1;    // time unit ratio wrt 1 us
 const int number_BS = 2;    // number of Base Stations
 typedef int [0, number_BS - 1] BSid_t;
 
-clock frame_clk[1];    // frame clock timer
+clock frame_clk[BSid_t];    // frame clock timer
 
 clock location_clk;    // UE location shift timer
 
@@ -1485,8 +1485,8 @@ void scheduleFrame()
 		<transition>
 			<source ref="id30"/>
 			<target ref="id29"/>
-			<label kind="synchronisation" x="-671" y="-85">frame_start[bs]!</label>
-			<label kind="assignment" x="-680" y="-68">frame_clk[bs] = 0</label>
+			<label kind="synchronisation" x="-688" y="-85">frame_start[bs]!</label>
+			<label kind="assignment" x="-688" y="-68">frame_clk[bs] = 0</label>
 		</transition>
 		<transition>
 			<source ref="id29"/>
@@ -1858,7 +1858,7 @@ x = 0</label>
 	</template>
 	<template>
 		<name>UserListenOnly</name>
-		<parameter>int id</parameter>
+		<parameter>UEid_t id</parameter>
 		<declaration>// --------------------------------------------------------------------------------------------
 // CONSTANTS
 // --------------------------------------------------------------------------------------------
@@ -2176,7 +2176,7 @@ prob_success = getCQI(id, bs)</label>
 	</template>
 	<template>
 		<name>UserJoined</name>
-		<parameter>int id</parameter>
+		<parameter>UEid_t id</parameter>
 		<declaration>// --------------------------------------------------------------------------------------------
 // CONSTANTS
 // --------------------------------------------------------------------------------------------
@@ -2435,7 +2435,7 @@ dedicated[id]</label>
 	</template>
 	<template>
 		<name>UserStates</name>
-		<parameter>int id</parameter>
+		<parameter>UEid_t id</parameter>
 		<declaration>// --------------------------------------------------------------------------------------------
 // CONSTANTS
 // --------------------------------------------------------------------------------------------
@@ -2665,7 +2665,7 @@ offset &lt;= start_offsets[id]</label>
 	</template>
 	<template>
 		<name>UserConnect</name>
-		<parameter>int id</parameter>
+		<parameter>UEid_t id</parameter>
 		<declaration>// --------------------------------------------------------------------------------------------
 // CONSTANTS
 // --------------------------------------------------------------------------------------------
@@ -3478,7 +3478,7 @@ ch = getCh(id, ch)</label>
 		</transition>
 	</template>
 	<system>// Place template instantiations here.
-usr_1 = UserStates(0);
+/*usr_1 = UserStates(0);
 usr_1c = UserConnect(0);
 usr_1j = UserJoined(0);
 usr_1lt = UserListenOnly(0);
@@ -3647,7 +3647,7 @@ usr_19lt = UserListenOnly(18);
 usr_19s = UserStream(18);
 usr_19sm = UserSample(18);
 usr_19sl = UserSleep(18);
-usr_19ip = InternalUEProcessing(18);
+usr_19ip = InternalUEProcessing(18);*/
 
 bs_1 = BaseStation(0);
 bs_1clk = FrameClock(0);
@@ -3660,10 +3660,9 @@ bs_2s = Scheduler(1);
 bs_2ip = InternalBSProcessing(1);
 
 // List one or more processes to be composed into a system.
-system bs_1, usr_1s, usr_2lt,
-bs_1clk, bs_1s, bs_1ip,
-//bs_2, bs_2clk, bs_2s, bs_2ip,
-usr_1, usr_1sl, usr_1c, usr_1j, usr_1lt, usr_1sm, usr_1ip,
+system BaseStation, FrameClock, Scheduler, InternalBSProcessing,
+UserStates, UserConnect, UserJoined, UserListenOnly, UserStream, UserSample, UserSleep, InternalUEProcessing;
+/*usr_1, usr_1sl, usr_1c, usr_1j, usr_1lt, usr_1sm, usr_1ip,
 usr_2, usr_2sl, usr_2c, usr_2j, usr_2s, usr_2sm, usr_2ip,
 usr_3, usr_3sl, usr_3c, usr_3j, usr_3lt, usr_3s, usr_3sm, usr_3ip,
 usr_4, usr_4sl, usr_4c, usr_4j, usr_4lt, usr_4s, usr_4sm, usr_4ip,
@@ -3681,7 +3680,7 @@ usr_15, usr_15sl, usr_15c, usr_15j, usr_15lt, usr_15s, usr_15sm, usr_15ip,
 usr_16, usr_16sl, usr_16c, usr_16j, usr_16lt, usr_16s, usr_16sm, usr_16ip,
 usr_17, usr_17sl, usr_17c, usr_17j, usr_17lt, usr_17s, usr_17sm, usr_17ip,
 usr_18, usr_18sl, usr_18c, usr_18j, usr_18lt, usr_18s, usr_18sm, usr_18ip,
-usr_19, usr_19sl, usr_19c, usr_19j, usr_19lt, usr_19s, usr_19sm, usr_19ip;</system>
+usr_19, usr_19sl, usr_19c, usr_19j, usr_19lt, usr_19s, usr_19sm, usr_19ip;*/</system>
 	<queries>
 		<query>
 			<formula>E&lt;&gt; ( bs_1.TRANSMIT_BCH and bs_1s.INITIAL and bs_1ip.INITIAL and bs_2.TRANSMIT_BCH and bs_2s.INITIAL and bs_2ip.INITIAL and usr_1.ON and usr_1s.INITIAL and usr_1c.INITIAL and usr_1j.INITIAL and usr_1lt.INITIAL and usr_1sm.INITIAL )</formula>
@@ -3724,7 +3723,7 @@ usr_19, usr_19sl, usr_19c, usr_19j, usr_19lt, usr_19s, usr_19sm, usr_19ip;</syst
 			<comment></comment>
 		</query>
 		<query>
-			<formula>E [&lt;= 200000000; 1] (max: sum(i: UEid_t) sleep_percent[i])</formula>
+			<formula>E [&lt;= 2000000; 1] (max: sum(i: UEid_t) sleep_percent[i])</formula>
 			<comment></comment>
 		</query>
 		<query>
