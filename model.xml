@@ -564,8 +564,7 @@ int getDLMetaData(BSid_t bs)
 
 int getDLAudioData(BSid_t bs)
 {
-    // return UL_audio_size * 8;
-    return (audio_quality[3]/1000) * frame_size[bs];
+    return UL_audio_size * 8;
 }
 
 int BCH_meta_bits;
@@ -577,9 +576,9 @@ int getBCHDuration(BSid_t bs)    // in us
     int streaming, listening, connected;
     int BCH_slot_meta_bits = 5 * 8;
     //                             in us
-    BCH_meta_bits = (((512 * 1024)/frame_size[bs]/8) + 64) * 8;
+    BCH_meta_bits = DL_meta_size * 8;
     //                                           in us
-    BCH_slot_audio_bits = (audio_quality[3]/1000) * frame_size[bs] + BCH_slot_meta_bits;
+    BCH_slot_audio_bits = 41 * 8;
     // BCH size for streaming, Listening-Only and connected UEs
     streaming = (BCH_slot_meta_bits + BCH_slot_audio_bits) * getActive(bs);
     listening = (BCH_slot_meta_bits + BCH_slot_audio_bits) * getListeners(bs);
@@ -602,7 +601,7 @@ int audio_size;
 int getULAudioData(UEid_t id)
 {
     BSid_t bs = getBS(id);
-    audio_size = (audio_quality[static_profile[id]]/1000) * frame_size[bs] + getULMetaData();
+    audio_size = UL_audio_size * 8 + getULMetaData();
     return audio_size;
 }
 
@@ -716,7 +715,7 @@ int getCh(UEid_t id, int ch)
 
 // CONSTANTS ----------------------------------------------------------------------------------
 
-const int24_t speed_volume = 1000000;    // a multiply of PI value: the higher, the slower is motion
+const int24_t speed_volume = 100000;    // a multiply of PI value: the higher, the slower is motion
 
 // VARIABLES ----------------------------------------------------------------------------------
 
@@ -808,14 +807,18 @@ void getDistances(UEid_t id)
     for(i: BSid_t)
     {
         p = BS_location[i];
-        distances[i][id] = fint(sqrt(fabs(pow(p.a - x * 100, 2) + pow(p.b - y * 100, 2))));
+        distances[i][id] = fint(sqrt(fabs(pow(p.a - x * 100, 2) + pow(p.b - y * 100, 2))))/10;
     }
 }
 
 int24_t getCQI(UEid_t id, BSid_t bs)
 {
+    int24_t quality;    
     getDistances(id);
-    return fint(distances[bs][id] * 100/480);
+    quality = fint(distances[bs][id] * 100/61);
+    if(quality &gt; 100)
+        quality = 100;
+    return quality;
 }
 
 // --------------------------------------------------------------------------------------------
@@ -823,6 +826,8 @@ int24_t getCQI(UEid_t id, BSid_t bs)
 // --------------------------------------------------------------------------------------------
 
 bool first_connection[UEid_t] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}; 
+
+int24_t bytes_transmitted[UEid_t] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}; 
 </declaration>
 	<template>
 		<name>LocationClock</name>
@@ -1338,7 +1343,7 @@ void processQueue(Queue_t queue, bool audio)
 	            //    return;
 
     	        // UL
-                setSlot(j++, ue.id, slot_start, duration, 0, 3, 2);
+                setSlot(j++, ue.id, slot_start, duration, fint(duration * data_rate[bs]), 3, 2);
 	            slot_start += duration;
                 UL_duration += duration;
                 slot_count++;
@@ -1347,7 +1352,7 @@ void processQueue(Queue_t queue, bool audio)
                 ACK_duration = getACKDuration(bs);
                 slot_size = ACK_duration;
                 UL_duration += ACK_duration;
-                setSlot(j++, -1, slot_start, slot_size, 0, 5, 3);
+                setSlot(j++, -1, slot_start, slot_size, fint(slot_size * data_rate[bs]), 5, 3);
 	            slot_start += slot_size;
                 slot_count++;
             }
@@ -1401,12 +1406,12 @@ void scheduleFrame()
     }
 
     slot_size = getBCH();
-    setSlot(j++, -1, slot_start, slot_size, 0, 3, 0);
+    setSlot(j++, -1, slot_start, slot_size, fint(slot_size * data_rate[bs]), 3, 0);
     slot_start += slot_size;
 
     // RACH
     slot_size = getRACHDuration(bs);
-    setSlot(j++, -1, slot_start, slot_size, 0, 5, 1);
+    setSlot(j++, -1, slot_start, slot_size, 0, 3, 1);
     RACH_start[bs] = slot_start;
     RACH_size[bs] = slot_size;
     slot_start += slot_size;
@@ -2800,6 +2805,7 @@ int24_t time;
 int24_t getUARTTime()
 {
     time = samples_ready[id];
+    bytes_transmitted[id] = fint(slots[bs][slot].data/8);
     return time;
 }
 
@@ -2814,7 +2820,7 @@ void samplesLost()
         samples_lost[id] += 1;
 }
 
-void samplesTrasmitted()
+void samplesTrasmitted(int i)
 {
     samples_success[id] += 1;
 }
@@ -2983,7 +2989,8 @@ ch_switch[id] = 0</label>
 		<transition>
 			<source ref="id133"/>
 			<target ref="id121"/>
-			<label kind="guard" x="-1411" y="-705">!ch_switch[id]</label>
+			<label kind="guard" x="-1419" y="-714">!ch_switch[id] &amp;&amp;
+x &lt;= getLatency(id)</label>
 		</transition>
 		<transition>
 			<source ref="id133"/>
@@ -3033,10 +3040,10 @@ ch_switch[id] = 0</label>
 		<transition>
 			<source ref="id128"/>
 			<target ref="id125"/>
-			<label kind="guard" x="-1428" y="-459">ACK[id]</label>
-			<label kind="assignment" x="-1428" y="-442">x = 0,
+			<label kind="guard" x="-1496" y="-450">ACK[id]</label>
+			<label kind="assignment" x="-1496" y="-433">x = 0,
 z = 0,
-samplesTrasmitted()</label>
+samplesTrasmitted(slot)</label>
 		</transition>
 		<transition>
 			<source ref="id135"/>
@@ -3749,12 +3756,11 @@ bs_2clk = FrameClock(1);
 bs_2s = Scheduler(1);
 bs_2ip = InternalBSProcessing(1);
 
-/*usr1_c = UserConnect(0);
+usr1_c = UserConnect(0);
 usr2_c = UserConnect(1);
 usr3_c = UserConnect(2);
 usr4_c = UserConnect(3);
-usr5_c = UserConnect(4);*/
-
+usr5_c = UserConnect(4);
 
 // List one or more processes to be composed into a system.
 system bs_1, usr_1s, usr_2s, usr_3s,
@@ -3781,8 +3787,7 @@ usr_17sl, usr_17j, usr_17lt, usr_17s, usr_17sm, usr_17ip,
 usr_18sl, usr_18j, usr_18lt, usr_18s, usr_18sm, usr_18ip,
 usr_19sl, usr_19j, usr_19lt, usr_19s, usr_19sm, usr_19ip,
 UserConnect,
-UserStates;
-//, ConnectTimer;</system>
+UserStates;</system>
 	<queries>
 		<query>
 			<formula>E&lt;&gt; ( bs_1.TRANSMIT_BCH and bs_1s.INITIAL and bs_1ip.INITIAL and bs_2.TRANSMIT_BCH and bs_2s.INITIAL and bs_2ip.INITIAL and usr_1.ON and usr_1s.INITIAL and usr_1c.INITIAL and usr_1j.INITIAL and usr_1lt.INITIAL and usr_1sm.INITIAL )</formula>
@@ -3877,7 +3882,15 @@ UserStates;
 			<comment></comment>
 		</query>
 		<query>
-			<formula>E [&lt;= 200000000; 5] (max: sum(i:UEid_t) samples_lost[i])</formula>
+			<formula>E [&lt;= 20000000; 5] (max: sum(i:UEid_t) samples_lost[i])</formula>
+			<comment></comment>
+		</query>
+		<query>
+			<formula>E [&lt;= 200000000; 5] (max: sum(i:UEid_t) bytes_transmitted[i])</formula>
+			<comment></comment>
+		</query>
+		<query>
+			<formula>simulate [&lt;= 200000; 5] {bytes_transmitted[0], bytes_transmitted[1], bytes_transmitted[2], bytes_transmitted[3], bytes_transmitted[4]}</formula>
 			<comment></comment>
 		</query>
 		<query>
