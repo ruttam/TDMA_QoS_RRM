@@ -859,6 +859,8 @@ int24_t samples_discarded[UEid_t] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
 
 int24_t samples_success[UEid_t] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}; 
 
+int24_t data_transmit[UEid_t] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}; 
+
 int24_t samples_transmit[UEid_t] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}; 
 </declaration>
 	<template>
@@ -2868,6 +2870,7 @@ void getUARTTime()
 
     time = w;
     samples_transmit[id] = w;
+    data_transmit[id] = w * 4;
 }
 
 int getDisconnect()
@@ -3788,6 +3791,10 @@ UserStates, UserConnect, UserStream, UserSample, UserSleep, InternalUEProcessing
 		</query>
 		<query>
 			<formula>simulate [&lt;= 1000000; 1] {distances[0][0], distances[0][1], distances[0][2], distances[0][3], distances[0][4], distances[0][5], distances[0][6], distances[0][7], distances[0][8], distances[0][9], distances[0][10], distances[0][11], distances[0][12], distances[0][13], distances[0][14], distances[0][15], distances[0][16], distances[0][17], distances[0][18], distances[0][19]}</formula>
+			<comment></comment>
+		</query>
+		<query>
+			<formula>E [&lt;= 200000000; 5] (max: sum(i:UEid_t) data_transmit[i])</formula>
 			<comment></comment>
 		</query>
 		<query>
