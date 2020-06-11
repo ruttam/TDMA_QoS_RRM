@@ -260,6 +260,8 @@ int samples_ready[UEid_t] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 
 
 int24_t samples_lost[UEid_t] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};    // audio samples that were lost because of moving relevant sample window
 
+int24_t samples_success[UEid_t] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};    // audio samples that were lost because of moving relevant sample window
+
 bool ch_switch[UEid_t] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};    // flag if channel switch is needed after sleep mode
 
 // FUNCTIONS ----------------------------------------------------------------------------------
@@ -806,14 +808,14 @@ void getDistances(UEid_t id)
     for(i: BSid_t)
     {
         p = BS_location[i];
-        distances[i][id] = fint(sqrt(fabs(pow(p.a - x * 100, 2) + pow(p.b - y * 100, 2))))/speed_volume/100;
+        distances[i][id] = fint(sqrt(fabs(pow(p.a - x * 100, 2) + pow(p.b - y * 100, 2))));
     }
 }
 
 int24_t getCQI(UEid_t id, BSid_t bs)
 {
     getDistances(id);
-    return distances[bs][id];
+    return fint(distances[bs][id] * 100/480);
 }
 
 // --------------------------------------------------------------------------------------------
@@ -1550,8 +1552,6 @@ UEid_t new;    // ID of current slot's owner (UE)
 
 int slot = 0;    // slot counter during the frame execution
 
-int GI;
-
 int switch_delay;    // channel switch time
 
 // --------------------------------------------------------------------------------------------
@@ -1573,14 +1573,15 @@ void NACK()
 {
     if(ue != -1 &amp;&amp; !connecting[ue])
         ACK[ue] = false;
+    RACH_id[bs] = -1;
 }
 
 void getSwitchTime()
 {
-    if(GI &gt; channel_switch/2)
+    if(GI_size[bs] &gt; channel_switch/2)
         switch_delay = 0;
     else
-        switch_delay = channel_switch/2 - GI;
+        switch_delay = channel_switch/2 - GI_size[bs];
 }
 
 // --------------------------------------------------------------------------------------------
@@ -1780,9 +1781,9 @@ ue = slots[bs][slot].owner</label>
 		<transition>
 			<source ref="id41"/>
 			<target ref="id43"/>
-			<label kind="guard" x="-875" y="-697">x &gt;= GI &amp;&amp;
+			<label kind="guard" x="-901" y="-722">x &gt;= GI_size[bs] &amp;&amp;
 slot &lt; number_slots[bs]</label>
-			<label kind="assignment" x="-875" y="-654">current_slot[bs] = slot</label>
+			<label kind="assignment" x="-901" y="-688">current_slot[bs] = slot</label>
 		</transition>
 		<transition>
 			<source ref="id40"/>
@@ -1809,7 +1810,7 @@ slot &lt; number_slots[bs]</label>
 		<transition>
 			<source ref="id41"/>
 			<target ref="id35"/>
-			<label kind="guard" x="-1003" y="-833">x &gt;= GI &amp;&amp;
+			<label kind="guard" x="-1003" y="-833">x &gt;= GI_size[bs] &amp;&amp;
 slot &gt;= number_slots[bs]</label>
 			<label kind="assignment" x="-1003" y="-799">x = 0,
 ch = setCh()</label>
@@ -1882,7 +1883,7 @@ x = 0</label>
 	</template>
 	<template>
 		<name>UserListenOnly</name>
-		<parameter>int id</parameter>
+		<parameter>UEid_t id</parameter>
 		<declaration>// --------------------------------------------------------------------------------------------
 // CONSTANTS
 // --------------------------------------------------------------------------------------------
@@ -1920,7 +1921,7 @@ int slot;    // dedicated slot index
 z' == 0</label>
 		</location>
 		<location id="id55" x="-2184" y="-1708" color="#138d75">
-			<name x="-2269" y="-1725">BCH_ACK</name>
+			<name x="-2167" y="-1717">BCH_ACK</name>
 			<urgent/>
 		</location>
 		<location id="id56" x="-2016" y="-1427" color="#ffa500">
@@ -2005,6 +2006,19 @@ z &lt;= disconnect_timeout</label>
 		</branchpoint>
 		<init ref="id54"/>
 		<transition>
+			<source ref="id76"/>
+			<target ref="id67"/>
+			<label kind="probability" x="-1513" y="-1785">100 - prob_success</label>
+			<nail x="-1428" y="-1598"/>
+			<nail x="-1428" y="-1759"/>
+		</transition>
+		<transition>
+			<source ref="id75"/>
+			<target ref="id57"/>
+			<label kind="probability" x="-2176" y="-1759">100 - prob_success</label>
+			<nail x="-2040" y="-1768"/>
+		</transition>
+		<transition>
 			<source ref="id74"/>
 			<target ref="id57"/>
 			<label kind="guard" x="-2091" y="-1938">x &gt;= getLatency(id)</label>
@@ -2038,7 +2052,7 @@ x = 0</label>
 		<transition>
 			<source ref="id77"/>
 			<target ref="id68"/>
-			<label kind="probability" x="-1691" y="-1530">100 - prob_success</label>
+			<label kind="probability" x="-1700" y="-1530">100 - prob_success</label>
 			<nail x="-1623" y="-1453"/>
 			<nail x="-1623" y="-1504"/>
 		</transition>
@@ -2089,7 +2103,7 @@ x = 0</label>
 		<transition>
 			<source ref="id75"/>
 			<target ref="id55"/>
-			<label kind="probability" x="-2176" y="-1751">prob_success</label>
+			<label kind="probability" x="-2295" y="-1751">prob_success</label>
 		</transition>
 		<transition>
 			<source ref="id61"/>
@@ -2202,7 +2216,7 @@ prob_success = getCQI(id, bs)</label>
 	</template>
 	<template>
 		<name>UserJoined</name>
-		<parameter>int id</parameter>
+		<parameter>UEid_t id</parameter>
 		<declaration>// --------------------------------------------------------------------------------------------
 // CONSTANTS
 // --------------------------------------------------------------------------------------------
@@ -2265,7 +2279,7 @@ x &lt;= qca_latency</label>
 			<urgent/>
 		</location>
 		<location id="id87" x="688" y="680" color="#ffa500">
-			<name x="654" y="697">WAIT_ACK</name>
+			<name x="663" y="714">WAIT_ACK</name>
 		</location>
 		<location id="id88" x="382" y="408" color="#ca6f1e">
 			<name x="356" y="357">SLEEP</name>
@@ -2300,6 +2314,24 @@ x &lt;= channel_switch</label>
 		<branchpoint id="id97" x="824" y="680">
 		</branchpoint>
 		<init ref="id78"/>
+		<transition>
+			<source ref="id96"/>
+			<target ref="id85"/>
+			<label kind="probability" x="467" y="187">100 - prob_success</label>
+			<nail x="612" y="204"/>
+		</transition>
+		<transition>
+			<source ref="id97"/>
+			<target ref="id87"/>
+			<label kind="probability" x="705" y="688">100 - prob_success</label>
+		</transition>
+		<transition>
+			<source ref="id95"/>
+			<target ref="id90"/>
+			<label kind="probability" x="331" y="722">100 - prob_success</label>
+			<nail x="552" y="722"/>
+			<nail x="229" y="722"/>
+		</transition>
 		<transition>
 			<source ref="id94"/>
 			<target ref="id85"/>
@@ -2354,6 +2386,7 @@ x &lt;= channel_switch</label>
 		<transition>
 			<source ref="id91"/>
 			<target ref="id95"/>
+			<label kind="assignment" x="459" y="629">prob_success = getCQI(id, bs)</label>
 		</transition>
 		<transition>
 			<source ref="id87"/>
@@ -2401,7 +2434,8 @@ x &lt;= channel_switch</label>
 			<source ref="id83"/>
 			<target ref="id97"/>
 			<label kind="guard" x="833" y="629">x &gt;= slots[bs][slot].size/2</label>
-			<label kind="assignment" x="833" y="646">x = 0</label>
+			<label kind="assignment" x="833" y="646">x = 0,
+prob_success = getCQI(id, bs)</label>
 		</transition>
 		<transition>
 			<source ref="id82"/>
@@ -2421,8 +2455,7 @@ ch = getCh(id, ch)</label>
 			<source ref="id80"/>
 			<target ref="id83"/>
 			<label kind="guard" x="833" y="518">frame_clk[bs] &gt;= slots[bs][slot].start</label>
-			<label kind="assignment" x="833" y="535">x = 0,
-prob_success = getCQI(id, bs)</label>
+			<label kind="assignment" x="833" y="535">x = 0</label>
 		</transition>
 		<transition>
 			<source ref="id81"/>
@@ -2777,7 +2810,13 @@ int getDisconnect()
 
 void samplesLost()
 {
-    samples_lost[id] += 1;
+    if(retransmission[getBS(id)])
+        samples_lost[id] += 1;
+}
+
+void samplesTrasmitted()
+{
+    samples_success[id] += 1;
 }
 
 // --------------------------------------------------------------------------------------------
@@ -2847,8 +2886,8 @@ x &lt;= getLatency(id)</label>
 			<name x="-1385" y="-544">SLEEP</name>
 			<label kind="invariant" x="-1385" y="-527">z' == 0</label>
 		</location>
-		<location id="id125" x="-1317" y="-450" color="#00ff00">
-			<name x="-1394" y="-467">UL_ACK</name>
+		<location id="id125" x="-1317" y="-476" color="#00ff00">
+			<name x="-1394" y="-493">UL_ACK</name>
 			<urgent/>
 		</location>
 		<location id="id126" x="-1198" y="-365" color="#00ffff">
@@ -2860,7 +2899,7 @@ x &lt;= getLatency(id)</label>
 			<label kind="invariant" x="-1232" y="-272">z' == 0</label>
 		</location>
 		<location id="id128" x="-1317" y="-365">
-			<name x="-1327" y="-399">D</name>
+			<name x="-1343" y="-365">D</name>
 			<urgent/>
 		</location>
 		<location id="id129" x="-1156" y="-637">
@@ -2896,15 +2935,18 @@ x &lt;= getLatency(id)</label>
 		<transition>
 			<source ref="id135"/>
 			<target ref="id126"/>
+			<label kind="probability" x="-1241" y="-314">100 - prob_success</label>
 			<nail x="-1198" y="-297"/>
 		</transition>
 		<transition>
 			<source ref="id137"/>
 			<target ref="id127"/>
+			<label kind="probability" x="-1275" y="-212">100 - prob_success</label>
 		</transition>
 		<transition>
 			<source ref="id136"/>
 			<target ref="id118"/>
+			<label kind="probability" x="-816" y="-884">100 - prob_success</label>
 			<nail x="-824" y="-892"/>
 		</transition>
 		<transition>
@@ -2991,14 +3033,15 @@ ch_switch[id] = 0</label>
 		<transition>
 			<source ref="id128"/>
 			<target ref="id125"/>
-			<label kind="guard" x="-1377" y="-433">ACK[id]</label>
-			<label kind="assignment" x="-1360" y="-416">x = 0,
-z = 0</label>
+			<label kind="guard" x="-1428" y="-459">ACK[id]</label>
+			<label kind="assignment" x="-1428" y="-442">x = 0,
+z = 0,
+samplesTrasmitted()</label>
 		</transition>
 		<transition>
 			<source ref="id135"/>
 			<target ref="id128"/>
-			<label kind="probability" x="-1351" y="-331">100</label>
+			<label kind="probability" x="-1351" y="-331">prob_success</label>
 		</transition>
 		<transition>
 			<source ref="id127"/>
@@ -3008,6 +3051,7 @@ z = 0</label>
 		<transition>
 			<source ref="id126"/>
 			<target ref="id129"/>
+			<label kind="assignment" x="-1198" y="-442">samplesLost()</label>
 			<nail x="-1198" y="-510"/>
 		</transition>
 		<transition>
@@ -3018,7 +3062,7 @@ z = 0</label>
 			<source ref="id136"/>
 			<target ref="id116"/>
 			<label kind="assignment" x="-816" y="-722">slot = getSlot(bs, id)</label>
-			<label kind="probability" x="-816" y="-739">100</label>
+			<label kind="probability" x="-816" y="-739">prob_success</label>
 		</transition>
 		<transition>
 			<source ref="id131"/>
@@ -3031,7 +3075,7 @@ ch = getCh(id, ch)</label>
 		</transition>
 		<transition>
 			<source ref="id124"/>
-			<target ref="id133"/>
+			<target ref="id129"/>
 			<label kind="synchronisation" x="-1309" y="-595">wake_up[id]?</label>
 			<label kind="assignment" x="-1309" y="-578">ch = getCh(id, ch)</label>
 		</transition>
@@ -3088,7 +3132,7 @@ slots[bs][slot].start</label>
 			<target ref="id127"/>
 			<label kind="synchronisation" x="-1215" y="-161">UTCH[ch][id]!</label>
 			<label kind="assignment" x="-1215" y="-144">x = 0</label>
-			<label kind="probability" x="-1215" y="-178">100</label>
+			<label kind="probability" x="-1215" y="-178">prob_success</label>
 			<nail x="-1147" y="-178"/>
 			<nail x="-1215" y="-178"/>
 		</transition>
@@ -3157,7 +3201,7 @@ ch = getCh(id, ch)</label>
 	</template>
 	<template>
 		<name>UserConnect</name>
-		<parameter>int id</parameter>
+		<parameter>UEid_t id</parameter>
 		<declaration>// --------------------------------------------------------------------------------------------
 // CONSTANTS
 // --------------------------------------------------------------------------------------------
@@ -3466,6 +3510,7 @@ int uart_latency = 0;    // UART transmission of audio data latency (in us)
 // FUNCTIONS
 // --------------------------------------------------------------------------------------------
 
+
 int getSampleTime()
 {
     // if audio quality is in bit rate (kbps)
@@ -3480,7 +3525,7 @@ void getNumberSamples()
     //int time = getSampleTime();
     //samples = frame_size[bs]/time;
     //return fint(frame_size[bs]/time);
-    samples_ready[id] = audio_quality[static_profile[id]] * (frame_size[bs]/1000);
+    samples_ready[id] = 1;
 }
 
 int getUARTTime()
@@ -3555,13 +3600,12 @@ uart_latency = getUARTTime()</label>
 		<transition>
 			<source ref="id156"/>
 			<target ref="id154"/>
-			<label kind="synchronisation" x="-1045" y="-714">sample[id]?</label>
-			<label kind="assignment" x="-1045" y="-697">x = 0,
+			<label kind="synchronisation" x="-1045" y="-731">sample[id]?</label>
+			<label kind="assignment" x="-1045" y="-714">x = 0,
 bs = getBS(id)</label>
 		</transition>
 	</template>
 	<system>// Place template instantiations here.
-usr_1c = UserConnect(0);
 usr_1j = UserJoined(0);
 usr_1lt = UserListenOnly(0);
 usr_1s = UserStream(0);
@@ -3569,7 +3613,6 @@ usr_1sm = UserSample(0);
 usr_1sl = UserSleep(0);
 usr_1ip = InternalUEProcessing(0);
 
-usr_2c = UserConnect(1);
 usr_2j = UserJoined(1);
 usr_2lt = UserListenOnly(1);
 usr_2s = UserStream(1);
@@ -3577,7 +3620,6 @@ usr_2sm = UserSample(1);
 usr_2sl = UserSleep(1);
 usr_2ip = InternalUEProcessing(1);
 
-usr_3c = UserConnect(2);
 usr_3j = UserJoined(2);
 usr_3lt = UserListenOnly(2);
 usr_3s = UserStream(2);
@@ -3585,7 +3627,6 @@ usr_3sm = UserSample(2);
 usr_3sl = UserSleep(2);
 usr_3ip = InternalUEProcessing(2);
 
-usr_4c = UserConnect(3);
 usr_4j = UserJoined(3);
 usr_4lt = UserListenOnly(3);
 usr_4s = UserStream(3);
@@ -3593,7 +3634,6 @@ usr_4sm = UserSample(3);
 usr_4sl = UserSleep(3);
 usr_4ip = InternalUEProcessing(3);
 
-usr_5c = UserConnect(4);
 usr_5j = UserJoined(4);
 usr_5lt = UserListenOnly(4);
 usr_5s = UserStream(4);
@@ -3601,7 +3641,6 @@ usr_5sm = UserSample(4);
 usr_5sl = UserSleep(4);
 usr_5ip = InternalUEProcessing(4);
 
-usr_6c = UserConnect(5);
 usr_6j = UserJoined(5);
 usr_6lt = UserListenOnly(5);
 usr_6s = UserStream(5);
@@ -3609,7 +3648,6 @@ usr_6sm = UserSample(5);
 usr_6sl = UserSleep(5);
 usr_6ip = InternalUEProcessing(5);
 
-usr_7c = UserConnect(6);
 usr_7j = UserJoined(6);
 usr_7lt = UserListenOnly(6);
 usr_7s = UserStream(6);
@@ -3617,7 +3655,6 @@ usr_7sm = UserSample(6);
 usr_7sl = UserSleep(6);
 usr_7ip = InternalUEProcessing(6);
 
-usr_8c = UserConnect(7);
 usr_8j = UserJoined(7);
 usr_8lt = UserListenOnly(7);
 usr_8s = UserStream(7);
@@ -3625,7 +3662,6 @@ usr_8sm = UserSample(7);
 usr_8sl = UserSleep(7);
 usr_8ip = InternalUEProcessing(7);
 
-usr_9c = UserConnect(8);
 usr_9j = UserJoined(8);
 usr_9lt = UserListenOnly(8);
 usr_9s = UserStream(8);
@@ -3633,7 +3669,6 @@ usr_9sm = UserSample(8);
 usr_9sl = UserSleep(8);
 usr_9ip = InternalUEProcessing(8);
 
-usr_10c = UserConnect(9);
 usr_10j = UserJoined(9);
 usr_10lt = UserListenOnly(9);
 usr_10s = UserStream(9);
@@ -3641,7 +3676,6 @@ usr_10sm = UserSample(9);
 usr_10sl = UserSleep(9);
 usr_10ip = InternalUEProcessing(9);
 
-usr_11c = UserConnect(10);
 usr_11j = UserJoined(10);
 usr_11lt = UserListenOnly(10);
 usr_11s = UserStream(10);
@@ -3649,7 +3683,6 @@ usr_11sm = UserSample(10);
 usr_11sl = UserSleep(10);
 usr_11ip = InternalUEProcessing(10);
 
-usr_12c = UserConnect(11);
 usr_12j = UserJoined(11);
 usr_12lt = UserListenOnly(11);
 usr_12s = UserStream(11);
@@ -3657,7 +3690,6 @@ usr_12sm = UserSample(11);
 usr_12sl = UserSleep(11);
 usr_12ip = InternalUEProcessing(11);
 
-usr_13c = UserConnect(12);
 usr_13j = UserJoined(12);
 usr_13lt = UserListenOnly(12);
 usr_13s = UserStream(12);
@@ -3665,7 +3697,6 @@ usr_13sm = UserSample(12);
 usr_13sl = UserSleep(12);
 usr_13ip = InternalUEProcessing(12);
 
-usr_14c = UserConnect(13);
 usr_14j = UserJoined(13);
 usr_14lt = UserListenOnly(13);
 usr_14s = UserStream(13);
@@ -3673,7 +3704,6 @@ usr_14sm = UserSample(13);
 usr_14sl = UserSleep(13);
 usr_14ip = InternalUEProcessing(13);
 
-usr_15c = UserConnect(14);
 usr_15j = UserJoined(14);
 usr_15lt = UserListenOnly(14);
 usr_15s = UserStream(14);
@@ -3681,7 +3711,6 @@ usr_15sm = UserSample(14);
 usr_15sl = UserSleep(14);
 usr_15ip = InternalUEProcessing(14);
 
-usr_16c = UserConnect(15);
 usr_16j = UserJoined(15);
 usr_16lt = UserListenOnly(15);
 usr_16s = UserStream(15);
@@ -3689,7 +3718,6 @@ usr_16sm = UserSample(15);
 usr_16sl = UserSleep(15);
 usr_16ip = InternalUEProcessing(15);
 
-usr_17c = UserConnect(16);
 usr_17j = UserJoined(16);
 usr_17lt = UserListenOnly(16);
 usr_17s = UserStream(16);
@@ -3697,7 +3725,6 @@ usr_17sm = UserSample(16);
 usr_17sl = UserSleep(16);
 usr_17ip = InternalUEProcessing(16);
 
-usr_18c = UserConnect(17);
 usr_18j = UserJoined(17);
 usr_18lt = UserListenOnly(17);
 usr_18s = UserStream(17);
@@ -3705,7 +3732,6 @@ usr_18sm = UserSample(17);
 usr_18sl = UserSleep(17);
 usr_18ip = InternalUEProcessing(17);
 
-usr_19c = UserConnect(18);
 usr_19j = UserJoined(18);
 usr_19lt = UserListenOnly(18);
 usr_19s = UserStream(18);
@@ -3723,31 +3749,40 @@ bs_2clk = FrameClock(1);
 bs_2s = Scheduler(1);
 bs_2ip = InternalBSProcessing(1);
 
+/*usr1_c = UserConnect(0);
+usr2_c = UserConnect(1);
+usr3_c = UserConnect(2);
+usr4_c = UserConnect(3);
+usr5_c = UserConnect(4);*/
+
+
 // List one or more processes to be composed into a system.
 system bs_1, usr_1s, usr_2s, usr_3s,
 bs_1clk, bs_1s, bs_1ip, usr_2lt,
 //bs_2, bs_2clk, bs_2s, bs_2ip,
-usr_1sl, usr_1c, usr_1j, usr_1lt, usr_1sm, usr_1ip,
-usr_2sl, usr_2c, usr_2j, usr_2sm, usr_2ip,
-usr_3sl, usr_3c, usr_3j, usr_3lt, usr_3sm, usr_3ip,
-usr_4sl, usr_4c, usr_4j, usr_4lt, usr_4s, usr_4sm, usr_4ip,
-usr_5sl, usr_5c, usr_5j, usr_5lt, usr_5s, usr_5sm, usr_5ip,
-usr_6sl, usr_6c, usr_6j, usr_6lt, usr_6s, usr_6sm, usr_6ip,
-usr_7sl, usr_7c, usr_7j, usr_7lt, usr_7s, usr_7sm, usr_7ip,
-usr_8sl, usr_8c, usr_8j, usr_8lt, usr_8s, usr_8sm, usr_8ip,
-usr_9sl, usr_9c, usr_9j, usr_9lt, usr_9s, usr_9sm, usr_9ip,
-usr_10sl, usr_10c, usr_10j, usr_10lt, usr_10s, usr_10sm, usr_10ip,
-usr_11sl, usr_11c, usr_11j, usr_11lt, usr_11s, usr_11sm, usr_11ip,
-usr_12sl, usr_12c, usr_12j, usr_12lt, usr_12s, usr_12sm, usr_12ip,
-usr_13sl, usr_13c, usr_13j, usr_13lt, usr_13s, usr_13sm, usr_13ip,
-usr_14sl, usr_14c, usr_14j, usr_14lt, usr_14s, usr_14sm, usr_14ip,
-usr_15sl, usr_15c, usr_15j, usr_15lt, usr_15s, usr_15sm, usr_15ip,
-usr_16sl, usr_16c, usr_16j, usr_16lt, usr_16s, usr_16sm, usr_16ip,
-usr_17sl, usr_17c, usr_17j, usr_17lt, usr_17s, usr_17sm, usr_17ip,
-usr_18sl, usr_18c, usr_18j, usr_18lt, usr_18s, usr_18sm, usr_18ip,
-usr_19sl, usr_19c, usr_19j, usr_19lt, usr_19s, usr_19sm, usr_19ip,
-UserStates,
-ConnectTimer;</system>
+usr_1sl, usr_1j, usr_1lt, usr_1sm, usr_1ip,
+usr_2sl, usr_2j, usr_2sm, usr_2ip,
+usr_3sl, usr_3j, usr_3lt, usr_3sm, usr_3ip,
+//usr1_c, usr2_c, usr3_c, usr4_c, usr5_c,
+usr_4sl, usr_4j, usr_4lt, usr_4s, usr_4sm, usr_4ip,
+usr_5sl, usr_5j, usr_5lt, usr_5s, usr_5sm, usr_5ip,
+usr_6sl, usr_6j, usr_6lt, usr_6s, usr_6sm, usr_6ip,
+usr_7sl, usr_7j, usr_7lt, usr_7s, usr_7sm, usr_7ip,
+usr_8sl, usr_8j, usr_8lt, usr_8s, usr_8sm, usr_8ip,
+usr_9sl, usr_9j, usr_9lt, usr_9s, usr_9sm, usr_9ip,
+usr_10sl, usr_10j, usr_10lt, usr_10s, usr_10sm, usr_10ip,
+usr_11sl, usr_11j, usr_11lt, usr_11s, usr_11sm, usr_11ip,
+usr_12sl, usr_12j, usr_12lt, usr_12s, usr_12sm, usr_12ip,
+usr_13sl, usr_13j, usr_13lt, usr_13s, usr_13sm, usr_13ip,
+usr_14sl, usr_14j, usr_14lt, usr_14s, usr_14sm, usr_14ip,
+usr_15sl, usr_15j, usr_15lt, usr_15s, usr_15sm, usr_15ip,
+usr_16sl, usr_16j, usr_16lt, usr_16s, usr_16sm, usr_16ip,
+usr_17sl, usr_17j, usr_17lt, usr_17s, usr_17sm, usr_17ip,
+usr_18sl, usr_18j, usr_18lt, usr_18s, usr_18sm, usr_18ip,
+usr_19sl, usr_19j, usr_19lt, usr_19s, usr_19sm, usr_19ip,
+UserConnect,
+UserStates;
+//, ConnectTimer;</system>
 	<queries>
 		<query>
 			<formula>E&lt;&gt; ( bs_1.TRANSMIT_BCH and bs_1s.INITIAL and bs_1ip.INITIAL and bs_2.TRANSMIT_BCH and bs_2s.INITIAL and bs_2ip.INITIAL and usr_1.ON and usr_1s.INITIAL and usr_1c.INITIAL and usr_1j.INITIAL and usr_1lt.INITIAL and usr_1sm.INITIAL )</formula>
@@ -3838,11 +3873,11 @@ ConnectTimer;</system>
 			<comment></comment>
 		</query>
 		<query>
-			<formula>E [&lt;= 200000000; 1] (max: sum(i:UEid_t) samples_lost[i])</formula>
+			<formula>E [&lt;= 200000000; 1] (max: sum(i:UEid_t) samples_success[i])</formula>
 			<comment></comment>
 		</query>
 		<query>
-			<formula>E [&lt;= 200000000; 1] (max: sum(i:UEid_t) samples_lost[i])</formula>
+			<formula>E [&lt;= 200000000; 5] (max: sum(i:UEid_t) samples_lost[i])</formula>
 			<comment></comment>
 		</query>
 		<query>
