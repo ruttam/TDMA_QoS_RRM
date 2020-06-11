@@ -1074,6 +1074,7 @@ x &lt;= GI_size[bs]</label>
 		<transition>
 			<source ref="id34"/>
 			<target ref="id26"/>
+			<label kind="probability" x="-697" y="-688">100 - prob_success</label>
 			<nail x="-484" y="-688"/>
 			<nail x="-790" y="-688"/>
 		</transition>
@@ -1115,9 +1116,7 @@ profile[ue] == 0</label>
 			<source ref="id34"/>
 			<target ref="id26"/>
 			<label kind="synchronisation" x="-688" y="-748">BCH[channel]!</label>
-			<label kind="assignment" x="-688" y="-731">slot = 0,
-x = 0</label>
-			<label kind="probability" x="-688" y="-765">1</label>
+			<label kind="probability" x="-688" y="-765">prob_success</label>
 		</transition>
 		<transition>
 			<source ref="id28"/>
@@ -1215,7 +1214,9 @@ RACH_id[bs] = -1</label>
 			<source ref="id18"/>
 			<target ref="id34"/>
 			<label kind="guard" x="-450" y="-765">frame_clk[bs] &gt;= BCH_duration</label>
-			<label kind="assignment" x="-450" y="-748">getProbability()</label>
+			<label kind="assignment" x="-450" y="-748">getProbability(),
+slot = 0,
+x = 0</label>
 		</transition>
 		<transition>
 			<source ref="id17"/>
@@ -2192,8 +2193,9 @@ bool checkChannel(int ch_id)
 		<transition>
 			<source ref="id96"/>
 			<target ref="id89"/>
-			<label kind="assignment" x="-2949" y="-2626">RACH_id[bs] = id</label>
-			<label kind="probability" x="-2949" y="-2643">prob_success</label>
+			<label kind="synchronisation" x="-2949" y="-2618">RACH[bs]!</label>
+			<label kind="assignment" x="-2949" y="-2601">RACH_id[bs] = id</label>
+			<label kind="probability" x="-2949" y="-2635">prob_success</label>
 		</transition>
 		<transition>
 			<source ref="id95"/>
@@ -2247,11 +2249,10 @@ getProbability()</label>
 		<transition>
 			<source ref="id90"/>
 			<target ref="id96"/>
-			<label kind="guard" x="-2949" y="-2575">x &gt;= RACH_size[bs]/2 &amp;&amp;
+			<label kind="guard" x="-2948" y="-2575">x &gt;= RACH_size[bs]/2 &amp;&amp;
 RACH_id[bs] == -1</label>
-			<label kind="synchronisation" x="-2949" y="-2541">RACH[bs]!</label>
-			<label kind="assignment" x="-2950" y="-2524">x = 0</label>
-			<nail x="-2958" y="-2558"/>
+			<label kind="assignment" x="-2949" y="-2541">x = 0</label>
+			<nail x="-2957" y="-2558"/>
 		</transition>
 		<transition>
 			<source ref="id91"/>
@@ -2490,7 +2491,7 @@ system bs_1, bs_1clk, bs_1s, bs_1ip, bs_2, bs_2clk, bs_2s, bs_2ip, usr_1, usr_1s
 			<comment></comment>
 		</query>
 		<query>
-			<formula>simulate [&lt;= 800000; 1] {bs_2s.RETRY, frame_clk[0]}</formula>
+			<formula>simulate [&lt;= 800000; 1] {frame_clk[0]}</formula>
 			<comment></comment>
 		</query>
 		<query>
