@@ -18,7 +18,7 @@ clock frame_clk[BSid_t];    // frame timer
 
 clock location_clk;    // UE movement timer
 
-const int number_UE = 20;    // number of User Equipment
+const int number_UE = 4;    // number of User Equipment
 typedef int [0, number_UE - 1] UEid_t;
 
 const int number_profiles = 5;    // number of UE profiles
@@ -31,9 +31,10 @@ const profileId_t RTa = 3;            // Real-Time Audio
 const profileId_t HqRTa = 4;          // High-Quality Real-Time Audio
 
 typedef int[-(1&lt;&lt;29),(1&lt;&lt;29)-1] int24_t;
+
 const int latency[profileId_t] = {-1, 2500, 70, 40, 20};    // latency requirements of each type of profiles (in ms)
 
-// const int audio_quality[profileId_t] = {-1, 32, 32, 48, 192};    // audio quality requirements (in kbits/s) of each type of profiles
+const int audio_quality[profileId_t] = {-1, 32, 32, 48, 192};    // audio quality requirements (in kbits/s) of each type of profiles
 
 const int UL_header_size = 14;    // UL header size (in Bytes)
 
@@ -43,7 +44,7 @@ const int UL_meta_size = 19;    // UL meta data bits (reserved for and shared be
 
 const int DL_meta_size = 30;    // DL meta data bits (reserved for and shared between DLC and MAC data) (in Bytes)
 
-const int number_MCS = 8;    // 
+const int number_MCS = 8;    // number of supported MCS schemes
 
 // slot data types
 const int rach = 1;
@@ -51,11 +52,11 @@ const int dl = 3;
 
 // GLOBAL VARIABLES ---------------------------------------------------------------------------
 
-profileId_t profile[UEid_t] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};    // current profiles of the UEs
+profileId_t profile[UEid_t];    // current profiles of the UEs
 
 int channel_bandwidth[BSid_t] = {40, 20};    // MHz
 
-int24_t frame_size[BSid_t] = {0, 0};
+int24_t frame_size[BSid_t] = {0, 0};    // in us
 
 int24_t transmission_duration[BSid_t] = {0, 0};
 
@@ -95,36 +96,7 @@ typedef struct {
 const int number_sl =  number_UE * 2 + 2;
 typedef int [0, number_sl - 1] slotID_t;
 
-slot_t slots[BSid_t][slotID_t] = {
-    {{-1, -1, -1, -1, -1, -1}, {-1, -1, -1, -1, -1, -1}, {-1, -1, -1, -1, -1, -1},
-     {-1, -1, -1, -1, -1, -1}, {-1, -1, -1, -1, -1, -1}, {-1, -1, -1, -1, -1, -1},
-     {-1, -1, -1, -1, -1, -1}, {-1, -1, -1, -1, -1, -1}, {-1, -1, -1, -1, -1, -1},
-     {-1, -1, -1, -1, -1, -1}, {-1, -1, -1, -1, -1, -1}, {-1, -1, -1, -1, -1, -1},
-     {-1, -1, -1, -1, -1, -1}, {-1, -1, -1, -1, -1, -1}, {-1, -1, -1, -1, -1, -1},
-     {-1, -1, -1, -1, -1, -1}, {-1, -1, -1, -1, -1, -1}, {-1, -1, -1, -1, -1, -1},
-     {-1, -1, -1, -1, -1, -1}, {-1, -1, -1, -1, -1, -1}, {-1, -1, -1, -1, -1, -1},
-     {-1, -1, -1, -1, -1, -1}, {-1, -1, -1, -1, -1, -1}, {-1, -1, -1, -1, -1, -1},
-     {-1, -1, -1, -1, -1, -1}, {-1, -1, -1, -1, -1, -1}, {-1, -1, -1, -1, -1, -1},
-     {-1, -1, -1, -1, -1, -1}, {-1, -1, -1, -1, -1, -1}, {-1, -1, -1, -1, -1, -1},
-     {-1, -1, -1, -1, -1, -1}, {-1, -1, -1, -1, -1, -1}, {-1, -1, -1, -1, -1, -1},
-     {-1, -1, -1, -1, -1, -1}, {-1, -1, -1, -1, -1, -1}, {-1, -1, -1, -1, -1, -1},
-     {-1, -1, -1, -1, -1, -1}, {-1, -1, -1, -1, -1, -1}, {-1, -1, -1, -1, -1, -1},
-     {-1, -1, -1, -1, -1, -1}, {-1, -1, -1, -1, -1, -1}, {-1, -1, -1, -1, -1, -1}},
-    {{-1, -1, -1, -1, -1, -1}, {-1, -1, -1, -1, -1, -1}, {-1, -1, -1, -1, -1, -1},
-     {-1, -1, -1, -1, -1, -1}, {-1, -1, -1, -1, -1, -1}, {-1, -1, -1, -1, -1, -1},
-     {-1, -1, -1, -1, -1, -1}, {-1, -1, -1, -1, -1, -1}, {-1, -1, -1, -1, -1, -1},
-     {-1, -1, -1, -1, -1, -1}, {-1, -1, -1, -1, -1, -1}, {-1, -1, -1, -1, -1, -1},
-     {-1, -1, -1, -1, -1, -1}, {-1, -1, -1, -1, -1, -1}, {-1, -1, -1, -1, -1, -1},
-     {-1, -1, -1, -1, -1, -1}, {-1, -1, -1, -1, -1, -1}, {-1, -1, -1, -1, -1, -1},
-     {-1, -1, -1, -1, -1, -1}, {-1, -1, -1, -1, -1, -1}, {-1, -1, -1, -1, -1, -1},
-     {-1, -1, -1, -1, -1, -1}, {-1, -1, -1, -1, -1, -1}, {-1, -1, -1, -1, -1, -1},
-     {-1, -1, -1, -1, -1, -1}, {-1, -1, -1, -1, -1, -1}, {-1, -1, -1, -1, -1, -1},
-     {-1, -1, -1, -1, -1, -1}, {-1, -1, -1, -1, -1, -1}, {-1, -1, -1, -1, -1, -1},
-     {-1, -1, -1, -1, -1, -1}, {-1, -1, -1, -1, -1, -1}, {-1, -1, -1, -1, -1, -1},
-     {-1, -1, -1, -1, -1, -1}, {-1, -1, -1, -1, -1, -1}, {-1, -1, -1, -1, -1, -1},
-     {-1, -1, -1, -1, -1, -1}, {-1, -1, -1, -1, -1, -1}, {-1, -1, -1, -1, -1, -1},
-     {-1, -1, -1, -1, -1, -1}, {-1, -1, -1, -1, -1, -1}, {-1, -1, -1, -1, -1, -1}}
-};
+slot_t slots[BSid_t][slotID_t];
 
 // --------------------------------------------------------------------------------------------
 // INITIAL CASE
@@ -134,15 +106,13 @@ slot_t slots[BSid_t][slotID_t] = {
 
 // CONSTANTS ----------------------------------------------------------------------------------
 
-const int audio_quality[profileId_t] = {-1, 32, 32, 48, 192};    // audio quality requirements (in kbits/s) of each type of profiles
+profileId_t static_profile[UEid_t];    // profiles of the UEs - can be negotiated with the BS
 
-const profileId_t static_profile[UEid_t] = {3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3};    // profiles of the UEs - can be negotiated with the BS
+int UL_audio_size = 41;    // UL slot audio size: audio (40B) + checksum (1B) (in Bytes)
 
-const int UL_audio_size = 41;    // UL slot audio size: audio (40B) + checksum (1B) (in Bytes)
+int bit_depth[UEid_t];    // size of a sample in bits
 
-const int bit_depth[UEid_t] = {16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16};
-
-const int UE_uart_speed[UEid_t] = {1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1};    // UE UART speed in Mbits/s
+int UE_uart_speed[UEid_t];    // UE UART speed in Mbits/s
 
 // --------------------------------------------------------------------------------------------
 // UE INITIAL
@@ -155,17 +125,17 @@ broadcast chan started[UEid_t];    // UE start signal
 const int offset_used = -1;    // offset ID used (-1: using default)
 
 // offsets (in ms)
-const int offsets[2][UEid_t] =
+const int offsets[2][10] =
 {
-    {1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10},
-    {10, 20, 5, 0, 10, 40, 7, 15, 30, 0, 10, 20, 5, 0, 10, 40, 7, 15, 30, 0}
+    {1, 2, 3, 4, 5, 6, 7, 8, 9, 10},
+    {10, 20, 5, 0, 10, 40, 7, 15, 30, 0}
 };
 
 // VARIABLES ----------------------------------------------------------------------------------
 
-int BS_assignment[UEid_t] = {-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1};    // initial association with the BS
+int BS_assignment[UEid_t];    // initial association with the BS
 
-bool dedicated[UEid_t] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};    // flag of slot assignment for a UE within the current frame
+bool dedicated[UEid_t];    // flag of slot assignment for a UE within the current frame
 
 // FUNCTIONS ----------------------------------------------------------------------------------
 
@@ -218,9 +188,9 @@ int RACH_size[BSid_t] = {0, 0};  // size of random access channel slots (us * un
 
 int RACH_id[BSid_t] = {-1, -1};    // UE id which sends RACH signal in the current RACH slot
 
-bool ACK[UEid_t] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};    // BS acknowledge of the initial UL resource request from the UE
+bool ACK[UEid_t];    // BS acknowledge of the initial UL resource request from the UE
 
-bool connecting[UEid_t] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};    // UE id which send RACH connection request
+bool connecting[UEid_t];    // UE id which send RACH connection request
 
 // --------------------------------------------------------------------------------------------
 // LISTEN_ONLY
@@ -260,11 +230,13 @@ broadcast chan UTCH[number_channels][UEid_t];    // up-link UE signal to BS tran
 
 // VARIABLES ----------------------------------------------------------------------------------
 
-int24_t samples_ready[UEid_t] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};    // audio samples ready to be read from memory
+int24_t samples_ready[UEid_t];    // audio samples ready to be read from memory
 
-int24_t samples_lost[UEid_t] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};    // audio samples that were lost because of moving relevant sample window
+int24_t samples_lost[UEid_t];    // audio samples that were lost because of moving relevant sample window
 
-bool ch_switch[UEid_t] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};    // flag if channel switch is needed after sleep mode
+int24_t samples_collected[UEid_t];    // audio samples that were collected after the last transmission
+
+bool ch_switch[UEid_t];    // flag if channel switch is needed after sleep mode
 
 // FUNCTIONS ----------------------------------------------------------------------------------
 
@@ -480,68 +452,43 @@ int channel[BSid_t][2] =    // BCH transmission channel frequencies (kHz)
     {1, 2}
 };
 
-int BCH_duration[BSid_t] = {0, 0};
-
-int BCH_start[BSid_t] = {0, 0};
+int previous_duration[BSid_t];
 
 bool retransmission[BSid_t] = {false, false};
 
 int number_slots[BSid_t] = {0, 0};    //  UTCHs, UCCHs and RACH
 
-// Queues
+// QUEUES --------------------------------------------------------------------------------------
 
-Queue_t HqRTa_queue[BSid_t] =    // Queue of active devices with HqRTa profile
-{
-    {-1, -1, 0, {{-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}}},
-    {-1, -1, 0, {{-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}}}
-};
+Queue_t HqRTa_queue[BSid_t];    // Queue of active devices with HqRTa profile
 
-Queue_t RTa_queue[BSid_t] =    // Queue of active devices with RTa profile
-{
-    {-1, -1, 0, {{-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}}},
-    {-1, -1, 0, {{-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}}}
-};
+Queue_t HqRTa_served[BSid_t];    // Queue of served active devices with HqRTa profile
 
-Queue_t SRTa_queue[BSid_t] =    // Queue of active devices with SRTa profile
-{
-    {-1, -1, 0, {{-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}}},
-    {-1, -1, 0, {{-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}}}
-};
+Queue_t RTa_queue[BSid_t];    // Queue of active devices with RTa profile
 
-Queue_t LO_queue[BSid_t] =    // Queue of active devices with HqRTa profile
-{
-    {-1, -1, 0, {{-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}}},
-    {-1, -1, 0, {{-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}}}
-};
+Queue_t RTa_served[BSid_t];    // Queue of served active devices with RTa profile
 
-Queue_t priority_queue[BSid_t] =    // Queue of active devices with profiles RTa, hqRTa and sRTA
-{
-    {-1, -1, 0, {{-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}}},
-    {-1, -1, 0, {{-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}}}
-};
+Queue_t SRTa_queue[BSid_t];    // Queue of active devices with SRTa profile
 
-Queue_t request_queue[BSid_t] =    // Queue of active devices in joined and Listen-Only modes
-{
-    {-1, -1, 0, {{-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}}},
-    {-1, -1, 0, {{-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}}}
-};
+Queue_t SRTa_served[BSid_t];    // Queue of served active devices with SRTa profile
 
-bool active_UE[BSid_t][UEid_t] = {    // identification of UE that are active
-    {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
-    {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}
-};
+Queue_t LO_queue[BSid_t];    // Queue of active devices with HqRTa profile
 
-bool listen_only_UE[BSid_t][UEid_t] = {    // identification of UE that are in Listen-Only mode
-    {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
-    {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}
-};
+Queue_t LO_served[BSid_t];    // Queue of served active devices with HqRTa profile
 
-bool connected_UE[BSid_t][UEid_t] = {    // identification of UE that are in initial connected mode
-    {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
-    {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}
-};
+Queue_t priority_queue[BSid_t];    // Queue of active devices with profiles RTa, hqRTa and sRTA
 
-int UE_CQI[UEid_t] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};    // channel quality indications of all active UE
+Queue_t request_queue[BSid_t];    // Queue of active devices in joined and Listen-Only modes
+
+// --------------------------------------------------------------------------------------------
+
+bool active_UE[BSid_t][UEid_t];    // identification of UE that are active
+
+bool listen_only_UE[BSid_t][UEid_t];    // identification of UE that are in Listen-Only mode
+
+bool connected_UE[BSid_t][UEid_t];    // identification of UE that are in initial connected mode
+
+int UE_CQI[UEid_t];    // channel quality indications of all active UE
 
 slotID_t current_slot[BSid_t] = {0, 0};
 
@@ -674,13 +621,22 @@ void addUE(BSid_t bs, UEid_t id)
     else if(static_profile[id] == Listen_Only)
     {
         listen_only_UE[bs][id] = true;
-        enqueue(new_node, request_queue[bs]);
+        enqueue(new_node, LO_queue[bs]);
     }
-    else
+    else if(static_profile[id] == RTa)
     {
-        active_UE[bs][id] = true;
         new_node.prior = static_profile[id];
-        insert(new_node, priority_queue[bs]);
+        insert(new_node, RTa_queue[bs]);
+    }
+    else if(static_profile[id] == HqRTa)
+    {
+        new_node.prior = static_profile[id];
+        insert(new_node, HqRTa_queue[bs]);
+    }
+    else if(static_profile[id] == sRTa)
+    {
+        new_node.prior = static_profile[id];
+        insert(new_node, SRTa_queue[bs]);
     }
     RACH_id[bs] = -1;
 }
@@ -703,13 +659,13 @@ const int wake_up_latency = 250;    // wake-up latency (in us)
 
 // VARIABLES ----------------------------------------------------------------------------------
 
-int24_t sleep_time[UEid_t] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};    // RRM (Radio Resource Manager) calculated sleep time for UE after receiving UL ACKs
+int24_t sleep_time[UEid_t];    // RRM (Radio Resource Manager) calculated sleep time for UE after receiving UL ACKs
 
-bool sleeping[UEid_t] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};    // flag if a UE is sleeping
+bool sleeping[UEid_t];    // flag if a UE is sleeping
 
-int sleep_percent[UEid_t] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};    // sleeping percentage with regards to the frame duration
+int sleep_percent[UEid_t];    // sleeping percentage with regards to the frame duration
 
-int number_sleepers;
+int number_sleepers;    // count of sleeping UEs
 
 // FUNCTIONS ----------------------------------------------------------------------------------
 
@@ -757,14 +713,11 @@ typedef struct {
     int b;
 } Point_t;
 
-Point_t BS_location[number_BS] = {{20, 0}, {-10, 30}};
+Point_t BS_location[BSid_t] = {{20, 0}, {-10, 30}};
 
-Point_t UE_location[number_UE] = {{-1, -1}, {-1, -1}, {-1, -1}, {-1, -1}, {-1, -1}, {-1, -1}, {-1, -1}, {-1, -1}, {-1, -1}, {-1, -1}, {-1, -1}, {-1, -1}, {-1, -1}, {-1, -1}, {-1, -1}, {-1, -1}, {-1, -1}, {-1, -1}, {-1, -1}, {-1, -1}};
+Point_t UE_location[UEid_t];
 
-int24_t distances[number_BS][UEid_t] = {
-    {-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1},
-    {-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1}
-};
+int24_t distances[BSid_t][UEid_t];
 
 void getDistances(UEid_t id)
 {
@@ -853,15 +806,15 @@ int24_t getCQI(UEid_t id, BSid_t bs)
 // TESTING
 // --------------------------------------------------------------------------------------------
 
-bool first_connection[UEid_t] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}; 
+bool first_connection[UEid_t];
 
-int24_t samples_discarded[UEid_t] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}; 
+int24_t samples_discarded[UEid_t];
 
-int24_t samples_success[UEid_t] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}; 
+int24_t samples_success[UEid_t];
 
-int24_t data_transmit[UEid_t] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}; 
+int24_t data_transmit[UEid_t];
 
-int24_t samples_transmit[UEid_t] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}; 
+int24_t samples_transmit[UEid_t];
 </declaration>
 	<template>
 		<name>InternalUEProcessing</name>
@@ -1309,8 +1262,8 @@ Node_t ue;
 int UL_duration = 0;
 int ACK_duration = 0;
 int slot_count = 2;    // initial number of slots: BCH and RACH
-int slot_start = 0;
-int slot_size = 0;
+int24_t slot_start = 0;
+int24_t slot_size = 0;
 
 // --------------------------------------------------------------------------------------------
 // FUNCTIONS
@@ -1320,7 +1273,7 @@ int slot_size = 0;
 int gcd (int a, int b)
 {
     int t;
-    while (b)
+    while (b &gt; 0)
     {
         t = b;
         b = a % b;
@@ -1332,13 +1285,13 @@ int gcd (int a, int b)
 // Find GCD of latency requirement
 int findGCD() 
 {
-    int j;
+    int k = 0;
     int i = 0;
     int result = 0;
     bool found = false;
     while(!found &amp;&amp; i &lt; number_UE)
     {
-        if(BS_assignment[i] == bs)
+        if(BS_assignment[i] == bs &amp;&amp; latency[static_profile[i]] &lt;= 70)
         {
             result = latency[i];
             found = true;
@@ -1348,15 +1301,15 @@ int findGCD()
             i++;
         }
     }
-    if(result == 0)
+    if(!found)
     {
         return 0;
     }
-    for(j = i; j &lt; number_UE; j++)
+    for(k = i + 1; k &lt; number_UE; k++)
     { 
-        if(BS_assignment[j] == bs)
+        if(BS_assignment[k] == bs &amp;&amp; latency[static_profile[k]] &lt;= 70)
         {
-            result = gcd(latency[j], result); 
+            result = gcd(result, latency[k]); 
         }
     }
     return result;
@@ -1437,33 +1390,49 @@ void processQueue(Queue_t queue, bool audio)
 {
     int mcs_index = -1;
     int guard_interval = 0;
+    bool no_space = false;
+
     if(!isEmpty(queue))
     {
         int i = queue.size;
-	    while(i-- &gt; 0)
+	    while(i-- &gt; 0 &amp;&amp; !no_space)
 	    {
 	        int duration;
 	        ue = getFirst(queue);
 
             if(!sleeping[ue.id])
             {
-	            if(audio)
-	                slot_size = getULAudioDuration(ue.id);
-    	        else
-	                slot_size = getULMetaDuration(ue.id);
-
                 // UL
                 mcs_index = getMCS(ue.id);
                 guard_interval = MCS[mcs_index].GI;
-                setSlot(j++, ue.id, slot_start, slot_size, 0, mcs_index, 2);
-	            slot_start += slot_size + guard_interval;
-                slot_count++;
 
-                // DL ACK
-                slot_size = getACKDuration(bs);
-                setSlot(j++, -1, slot_start, slot_size, 0, mcs_index, 3);
-	            slot_start += slot_size + guard_interval;
-                slot_count++;
+	            if(audio)
+                {
+                    slot_size = MCS[mcs_index].data_rate * samples_collected[ue.id];
+	                //slot_size = getULAudioDuration(ue.id);
+    	        }
+                else
+                {
+	                slot_size = getULMetaDuration(ue.id);
+                }
+
+                if(transmission_duration[bs] - slot_size &lt; 0)
+                {
+                    no_space = true;
+                }
+                else
+                {
+                    // UL
+                    setSlot(j++, ue.id, slot_start, slot_size, 0, mcs_index, 2);
+	                slot_start += slot_size + guard_interval;
+                    slot_count++;
+
+                    // DL ACK
+                    slot_size = getACKDuration(bs);
+                    setSlot(j++, -1, slot_start, slot_size, 0, mcs_index, 3);
+	                slot_start += slot_size + guard_interval;
+                    slot_count++;
+                }
             }
 
             if(queue.size &gt; 1)
@@ -1483,7 +1452,7 @@ void resetSlots()
 
 void resetACKs()
 {
-    slotID_t i = 0;
+    int i = 0;
     while(i &lt; number_UE)
     {
         if(bs == BS_assignment[i])
@@ -1493,13 +1462,29 @@ void resetACKs()
     }
 }
 
+void calculateSamples()
+{
+    int i = 0;
+    while(i &lt; number_UE)
+    {
+        if(bs == BS_assignment[i])
+            samples_collected[i] = fint((transmission_duration[bs] * audio_quality[i])/bit_depth[i]/1000);
+        i++;
+    }
+}
+
+int24_t test;
 void scheduleFrame()
 {
     int i = 0;
-
+    int gcd = 0;
     j = 0;
     slot_count = 2;
     slot_start = 0;
+
+    previous_duration[bs] = transmission_duration[bs];
+
+    calculateSamples();
     transmission_duration[bs] = 0;
     
     resetSlots();
@@ -1520,11 +1505,13 @@ void scheduleFrame()
     RACH_size[bs] = slot_size;
     slot_start += slot_size + MCS[5].GI;
 
+    transmission_duration[bs] = findGCD() * 1000 - (slots[bs][1].start + slots[bs][1].size + MCS[slots[bs][1].MCS].GI);
+    test = findGCD();
+
     processQueue(HqRTa_queue[bs], true);
     processQueue(RTa_queue[bs], true);
     processQueue(SRTa_queue[bs], true);
     processQueue(LO_queue[bs], true);
-    processQueue(priority_queue[bs], true);
     processQueue(request_queue[bs], false);
 
     number_slots[bs] = slot_count;
@@ -1688,6 +1675,13 @@ void getSwitchTime()
         switch_delay = 0;
     else
         switch_delay = channel_switch/2 - MCS[slots[bs][number_slots[bs] - 1].MCS].GI;
+}
+
+void resetParams()
+{
+    int i;
+    for(i: UEid_t)
+        BS_assignment[i] = -1;
 }
 
 // --------------------------------------------------------------------------------------------
@@ -1959,7 +1953,8 @@ x = 0</label>
 		<transition>
 			<source ref="id31"/>
 			<target ref="id39"/>
-			<label kind="assignment" x="-833" y="-1020">ch = setCh()</label>
+			<label kind="assignment" x="-833" y="-1020">ch = setCh(),
+resetParams()</label>
 		</transition>
 	</template>
 	<template>
@@ -2585,7 +2580,7 @@ int24_t duration = fint(3.14159265359 * speed_volume);</declaration>
 // CONSTANTS
 // --------------------------------------------------------------------------------------------
 
-int24_t start_offsets[UEid_t] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+int24_t start_offsets[UEid_t];
 
 //int24_t start_offsets[UEid_t] = {5000, 0, 50000, 1000, 20000, 750, 100, 3030, 0, 2500, 5000, 0, 50000, 1000, 20000, 750, 100, 3030, 0, 2500};    // offsets of the UE start signal
 
@@ -2600,7 +2595,14 @@ int mode = 0;    // 0 - Initial, 1 - Listen Only, 2 - Streaming
 // --------------------------------------------------------------------------------------------
 // FUNCTIONS
 // --------------------------------------------------------------------------------------------
-</declaration>
+
+void setParams()
+{
+    bit_depth[id] = 16;
+    UE_uart_speed[id] = 1;
+    BS_assignment[id] = -1;
+    static_profile[id] = RTa;
+}</declaration>
 		<location id="id98" x="-15130" y="-15266" color="#ffffff">
 			<name x="-15172" y="-15291">INIT</name>
 			<label kind="invariant" x="-15223" y="-15274">offset' == 0</label>
@@ -2803,7 +2805,8 @@ offset &lt;= start_offsets[id]</label>
 		<transition>
 			<source ref="id98"/>
 			<target ref="id104"/>
-			<label kind="assignment" x="-15121" y="-15249">offset = 0</label>
+			<label kind="assignment" x="-15121" y="-15257">offset = 0,
+setParams()</label>
 		</transition>
 	</template>
 	<template>
@@ -3394,6 +3397,19 @@ int requestStart()
 		</branchpoint>
 		<init ref="id135"/>
 		<transition>
+			<source ref="id149"/>
+			<target ref="id146"/>
+			<label kind="probability" x="-3349" y="-2983">100 - prob_success</label>
+			<nail x="-3315" y="-2992"/>
+		</transition>
+		<transition>
+			<source ref="id150"/>
+			<target ref="id148"/>
+			<label kind="probability" x="-3867" y="-2949">100 - prob_success</label>
+			<nail x="-3527" y="-2924"/>
+			<nail x="-3876" y="-2924"/>
+		</transition>
+		<transition>
 			<source ref="id140"/>
 			<target ref="id146"/>
 			<label kind="guard" x="-3204" y="-3119">x &gt;= start &amp;&amp;
@@ -3436,9 +3452,9 @@ ch != -1</label>
 		<transition>
 			<source ref="id149"/>
 			<target ref="id146"/>
-			<label kind="synchronisation" x="-3246" y="-3035">RACH[bs]!</label>
-			<label kind="assignment" x="-3246" y="-3018">RACH_id[bs] = id</label>
-			<label kind="probability" x="-3246" y="-3052">100</label>
+			<label kind="synchronisation" x="-3247" y="-3051">RACH[bs]!</label>
+			<label kind="assignment" x="-3247" y="-3034">RACH_id[bs] = id</label>
+			<label kind="probability" x="-3247" y="-3068">prob_success</label>
 		</transition>
 		<transition>
 			<source ref="id145"/>
@@ -3542,14 +3558,15 @@ checkChannel(i)</label>
 			<target ref="id146"/>
 			<label kind="assignment" x="-3502" y="-3034">i = 0, j = 0,
 ch = getChan(id, ch, bs)</label>
-			<label kind="probability" x="-3502" y="-3051">100</label>
+			<label kind="probability" x="-3502" y="-3051">prob_success</label>
 			<nail x="-3341" y="-2992"/>
 		</transition>
 		<transition>
 			<source ref="id136"/>
 			<target ref="id150"/>
-			<label kind="guard" x="-3630" y="-2975">x &gt;= scan_lat</label>
-			<label kind="assignment" x="-3630" y="-2992">getStability()</label>
+			<label kind="guard" x="-3638" y="-2958">x &gt;= scan_lat</label>
+			<label kind="assignment" x="-3638" y="-2992">prob_success =
+getCQI(id, bs)</label>
 		</transition>
 		<transition>
 			<source ref="id135"/>
@@ -3714,20 +3731,10 @@ getSampleTime()</label>
 		</transition>
 	</template>
 	<system>// Place template instantiations here.
-bs_1 = BaseStation(0);
-bs_1clk = FrameClock(0);
-bs_1s = Scheduler(0);
-bs_1ip = InternalBSProcessing(0);
-
-bs_2 = BaseStation(1);
-bs_2clk = FrameClock(1);
-bs_2s = Scheduler(1);
-bs_2ip = InternalBSProcessing(1);
 
 // List one or more processes to be composed into a system.
-system bs_1, bs_1clk, bs_1s, bs_1ip,
-//bs_2, bs_2clk, bs_2s, bs_2ip,
-UserStates, UserConnect, UserStream, UserSample, UserSleep, InternalUEProcessing, ConnectTimer, LocationClock, TestLocation;</system>
+system BaseStation, FrameClock, Scheduler, InternalBSProcessing,
+UserStates, UserConnect, UserStream, UserSample, UserSleep, InternalUEProcessing, ConnectTimer, LocationClock;</system>
 	<queries>
 		<query>
 			<formula>E&lt;&gt; ( bs_1.TRANSMIT_BCH and bs_1s.INITIAL and bs_1ip.INITIAL and bs_2.TRANSMIT_BCH and bs_2s.INITIAL and bs_2ip.INITIAL and usr_1.ON and usr_1s.INITIAL and usr_1c.INITIAL and usr_1j.INITIAL and usr_1lt.INITIAL and usr_1sm.INITIAL )</formula>
