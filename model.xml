@@ -613,6 +613,7 @@ void addUE(BSid_t bs, UEid_t id)
     Node_t new_node = {-1, id};
     connecting[id] = true;
     ACK[id] = true;
+    BS_assignment[id] = bs;
     if(static_profile[id] == initial)
     {
         connected_UE[bs][id] = true;
@@ -800,6 +801,15 @@ int24_t getCQI(UEid_t id, BSid_t bs)
 {
     getDistances(id);
     return (distances[bs][id] * 100)/61;
+}
+
+// --------------------------------------------------------------------------------------------
+// QoS
+// --------------------------------------------------------------------------------------------
+
+int sample_window(UEid_t id)
+{
+    return (getLatency(id) * audio_quality[profile[id]])/bit_depth[id]/1000;
 }
 
 // --------------------------------------------------------------------------------------------
@@ -1303,7 +1313,7 @@ int findGCD()
     }
     if(!found)
     {
-        return 0;
+        return -11;
     }
     for(k = i + 1; k &lt; number_UE; k++)
     { 
@@ -1408,6 +1418,11 @@ void processQueue(Queue_t queue, bool audio)
 
 	            if(audio)
                 {
+                    if(samples_collected[ue.id] &gt; sample_window(ue.id))
+                    {
+                        samples_lost[ue.id] = samples_collected[ue.id] - sample_window(ue.id);
+                        samples_collected[ue.id] = sample_window(ue.id);
+                    }
                     slot_size = MCS[mcs_index].data_rate * samples_collected[ue.id];
 	                //slot_size = getULAudioDuration(ue.id);
     	        }
@@ -1505,7 +1520,7 @@ void scheduleFrame()
     RACH_size[bs] = slot_size;
     slot_start += slot_size + MCS[5].GI;
 
-    transmission_duration[bs] = findGCD() * 1000 - (slots[bs][1].start + slots[bs][1].size + MCS[slots[bs][1].MCS].GI);
+    transmission_duration[bs] = (findGCD() * 1000)/2 - (slots[bs][1].start + slots[bs][1].size + MCS[slots[bs][1].MCS].GI);
     test = findGCD();
 
     processQueue(HqRTa_queue[bs], true);
@@ -1902,8 +1917,9 @@ addUE(bs, ue)</label>
 		</transition>
 		<transition>
 			<source ref="id37"/>
-			<target ref="id49"/>
-			<label kind="assignment" x="-1037" y="-544">NACK()</label>
+			<target ref="id48"/>
+			<label kind="assignment" x="-1079" y="-510">NACK(),
+x = 0</label>
 		</transition>
 		<transition>
 			<source ref="id36"/>
@@ -2849,18 +2865,12 @@ int i;
 // FUNCTIONS
 // --------------------------------------------------------------------------------------------
 
-
-int sample_window()
-{
-    return (getLatency(id) * audio_quality[profile[id]])/bit_depth[id]/1000;
-}
-
 int24_t time = 10;
 int window;
 void getUARTTime()
 {
     int24_t w;
-    window = sample_window();
+    window = sample_window(id);
     if(samples_ready[id] &gt; window){
         samples_discarded[id] += samples_ready[id] - window;
         samples_ready[id] = window;
@@ -2889,7 +2899,7 @@ void samplesLost()
 
 void transmissionLost()
 {
-    int w = sample_window();
+    int w = sample_window(id);
     if(samples_ready[id] &gt; w)
         samples_lost[id] += samples_ready[id] - w;
     else
@@ -3313,13 +3323,11 @@ bool checkChannel(int ch_id)
     {
         if(channel[k][0] == ch_id)
         {
-            BS_assignment[id] = k;
             bs = k;
             return true;
         }
         if(channel[k][1] == ch_id)
         {
-            BS_assignment[id] = k;
             bs = k;
             return true;
         }
