@@ -18,7 +18,7 @@ clock frame_clk[BSid_t];    // frame timer
 
 clock location_clk;    // UE movement timer
 
-const int number_UE = 4;    // number of User Equipment
+const int number_UE = 10;    // number of User Equipment
 typedef int [0, number_UE - 1] UEid_t;
 
 const int number_profiles = 5;    // number of UE profiles
@@ -70,18 +70,18 @@ typedef struct {
     int coding_rate[2];
     int channel;
     int GI;
-    int24_t data_rate;
+    int24_t data_rate; // bits per us
 } MCS_t;
 
 MCS_t MCS[number_MCS] = {
-    {{1, 2}, 40, 80, 15000},
-    {{1, 2}, 40, 80, 30000},
-    {{3, 4}, 40, 80, 45000},
-    {{1, 2}, 40, 80, 60000},
-    {{3, 4}, 40, 80, 90000},
-    {{2, 3}, 40, 80, 120000},
-    {{3, 4}, 40, 80, 135000},
-    {{5, 6}, 40, 80, 150000}
+    {{1, 2}, 40, 80, 15},
+    {{1, 2}, 40, 80, 30},
+    {{3, 4}, 40, 80, 45},
+    {{1, 2}, 40, 80, 60},
+    {{3, 4}, 40, 80, 90},
+    {{2, 3}, 40, 80, 120},
+    {{3, 4}, 40, 80, 135},
+    {{5, 6}, 40, 80, 150}
 };
 
 typedef struct {
@@ -603,7 +603,8 @@ int getRACHData()
 
 int getRACHDuration(BSid_t bs)    // in us
 {
-    return getRACHData()/data_rate[bs];
+    return 250;
+    //return getRACHData()/data_rate[bs];
 }
 
 // --------------------------------------------------------------------------------------------
@@ -767,8 +768,8 @@ void getDistances(UEid_t id)
     if(id == 6 || id == 15)
     {
         // Talbot curve
-        x = (5 + sqrt(abs(fint(sin(location_clk/speed_volume))))) * cos(location_clk/speed_volume);
-        y = (5 + sqrt(abs(fint(sin(location_clk/speed_volume))))) * sin(location_clk/speed_volume);
+        x = (1 + sqrt(abs(fint(sin(location_clk/speed_volume))))) * cos(location_clk/speed_volume);
+        y = (1 + sqrt(abs(fint(sin(location_clk/speed_volume))))) * sin(location_clk/speed_volume);
     }
     if(id == 7 || id == 16)
     {
@@ -1023,7 +1024,7 @@ int24_t getSleepTime(UEid_t id)
             }
             //sleep_time[id] = fint(frame_size[bs] - frame_clk[bs] - sleep_latency - wake_up_latency);
             //sleep_time[id] = sleep_time[id] - 1;
-        }  
+        }
     }
     if(ch_switch[id])
         sleep_time[id] = sleep_time[id] - channel_switch;
@@ -1291,9 +1292,9 @@ int gcd (int a, int b)
     }
     return a;
 }
-  
+
 // Find GCD of latency requirement
-int findGCD() 
+int findGCD()
 {
     int k = 0;
     int i = 0;
@@ -1303,7 +1304,7 @@ int findGCD()
     {
         if(BS_assignment[i] == bs &amp;&amp; latency[static_profile[i]] &lt;= 70)
         {
-            result = latency[i];
+            result = latency[static_profile[i]];
             found = true;
         }
         else
@@ -1316,10 +1317,10 @@ int findGCD()
         return -11;
     }
     for(k = i + 1; k &lt; number_UE; k++)
-    { 
+    {
         if(BS_assignment[k] == bs &amp;&amp; latency[static_profile[k]] &lt;= 70)
         {
-            result = gcd(result, latency[k]); 
+            result = gcd(result, latency[static_profile[k]]);
         }
     }
     return result;
@@ -1333,7 +1334,7 @@ int findLCM()
     int m;
     bool found = false;
     while(!found &amp;&amp; i &lt; number_UE)
-    { 
+    {
         if(BS_assignment[i] == bs)
         {
             m = latency[i];
@@ -1351,7 +1352,7 @@ int findLCM()
         if(BS_assignment[j] == bs)
         {
             if(m % latency[j]) found = true;
-        } 
+        }
         else
         {
             j++;
@@ -1366,9 +1367,9 @@ int getBCH()
     return getBCHDuration(bs);
 }
 
-bool inRange(int low, int high, int24_t x) 
-{ 
-    return  ((x-low) &lt;= (high-low)); 
+bool inRange(int low, int high, int24_t x)
+{
+    return  ((x-low) &lt;= (high-low));
 }
 
 int getMCS(UEid_t id)
@@ -1423,8 +1424,8 @@ void processQueue(Queue_t queue, bool audio)
                         samples_lost[ue.id] = samples_collected[ue.id] - sample_window(ue.id);
                         samples_collected[ue.id] = sample_window(ue.id);
                     }
-                    slot_size = MCS[mcs_index].data_rate * samples_collected[ue.id];
-	                //slot_size = getULAudioDuration(ue.id);
+										slot_size = fint(((audio_quality[static_profile[ue.id]]/1000) * frame_size[bs] + getULMetaData())/MCS[mcs_index].data_rate);
+                    //slot_size = fint((samples_collected[ue.id]*bit_depth[ue.id])/MCS[mcs_index].data_rate);
     	        }
                 else
                 {
@@ -1438,6 +1439,8 @@ void processQueue(Queue_t queue, bool audio)
                 else
                 {
                     // UL
+                    if(slot_size == 0)
+                        slot_size = 5;
                     setSlot(j++, ue.id, slot_start, slot_size, 0, mcs_index, 2);
 	                slot_start += slot_size + guard_interval;
                     slot_count++;
@@ -1483,7 +1486,7 @@ void calculateSamples()
     while(i &lt; number_UE)
     {
         if(bs == BS_assignment[i])
-            samples_collected[i] = fint((transmission_duration[bs] * audio_quality[i])/bit_depth[i]/1000);
+            samples_collected[i] = fint((transmission_duration[bs] * audio_quality[static_profile[i]])/bit_depth[i]/1000);
         i++;
     }
 }
@@ -1501,7 +1504,7 @@ void scheduleFrame()
 
     calculateSamples();
     transmission_duration[bs] = 0;
-    
+
     resetSlots();
     // BCH
     if(!retransmission[bs])
@@ -1530,8 +1533,8 @@ void scheduleFrame()
     processQueue(request_queue[bs], false);
 
     number_slots[bs] = slot_count;
-    
-    transmission_duration[bs] = slots[bs][slot_count - 1].start + slots[bs][slot_count - 1].size + MCS[slots[bs][slot_count - 1].MCS].GI + channel_switch/2;
+
+    transmission_duration[bs] = findGCD();
 
     resetACKs();
 }
@@ -1618,7 +1621,7 @@ void scheduleFrame()
 			<target ref="id29"/>
 			<label kind="synchronisation" x="-765" y="-93">frame_start[bs]!</label>
 			<label kind="assignment" x="-765" y="-76">frame_clk[bs] = 0,
-frame_size[bs] = 
+frame_size[bs] =
 2 * transmission_duration[bs]</label>
 		</transition>
 		<transition>
@@ -1660,7 +1663,7 @@ UEid_t new;    // ID of current slot's owner (UE)
 
 int slot = 0;    // slot counter during the frame execution
 
-int24_t switch_delay = 0; 
+int24_t switch_delay = 0;
 
 // --------------------------------------------------------------------------------------------
 // FUNCTIONS
@@ -1726,7 +1729,7 @@ void resetParams()
 			<urgent/>
 		</location>
 		<location id="id37" x="-977" y="-467" color="#00ffff">
-			<name x="-1003" y="-450">UL_NACK</name>
+			<name x="-1045" y="-493">UL_NACK</name>
 			<urgent/>
 		</location>
 		<location id="id38" x="-1139" y="-740">
@@ -1786,6 +1789,12 @@ void resetParams()
 			<label kind="invariant" x="-306" y="-816">x &lt;= slots[bs][0].start</label>
 		</location>
 		<init ref="id31"/>
+		<transition>
+			<source ref="id37"/>
+			<target ref="id48"/>
+			<label kind="guard" x="-1122" y="-459">slots[bs][slot].type == rach</label>
+			<label kind="assignment" x="-1122" y="-442">x = 0</label>
+		</transition>
 		<transition>
 			<source ref="id36"/>
 			<target ref="id34"/>
@@ -1917,9 +1926,9 @@ addUE(bs, ue)</label>
 		</transition>
 		<transition>
 			<source ref="id37"/>
-			<target ref="id48"/>
-			<label kind="assignment" x="-1079" y="-510">NACK(),
-x = 0</label>
+			<target ref="id49"/>
+			<label kind="guard" x="-1113" y="-561">slots[bs][slot].type != rach</label>
+			<label kind="assignment" x="-1037" y="-544">NACK()</label>
 		</transition>
 		<transition>
 			<source ref="id36"/>
@@ -2881,7 +2890,7 @@ void getUARTTime()
     else
     {
         w = samples_ready[id];
-    }     
+    }
 
     time = w;
     samples_transmit[id] = w;
@@ -2895,7 +2904,7 @@ int getDisconnect()
 
 void samplesLost()
 {
-    if(retransmission[getBS(id)])    
+    if(retransmission[getBS(id)])
         samples_lost[id] += samples_transmit[id];
 }
 
@@ -3144,7 +3153,7 @@ samplesTransmitted()</label>
 		<transition>
 			<source ref="id125"/>
 			<target ref="id128"/>
-			<label kind="synchronisation" x="-1292" y="-229">DL[id]?</label>
+			<label kind="synchronisation" x="-1292" y="-229">DL[ch]?</label>
 		</transition>
 		<transition>
 			<source ref="id124"/>
@@ -3741,7 +3750,7 @@ void getSampleTime()
 
 void sampleReady()
 {
-    samples_ready[id] += 1;
+    samples_ready[id] += fint((x * audio_quality[profile[id]])/bit_depth[id]/1000);
 }
 
 int getUARTTime()
@@ -3871,7 +3880,7 @@ UserStates, UserConnect, UserStream, UserSample, UserSleep, InternalUEProcessing
 			<comment></comment>
 		</query>
 		<query>
-			<formula>simulate [&lt;= 400000; 1] {samples_lost[0]}</formula>
+			<formula>simulate [&lt;= 400000; 1] {samples_lost[100]}</formula>
 			<comment></comment>
 		</query>
 		<query>
@@ -3879,7 +3888,7 @@ UserStates, UserConnect, UserStream, UserSample, UserSleep, InternalUEProcessing
 			<comment></comment>
 		</query>
 		<query>
-			<formula>E [&lt;= 100000000; 1] (max: sleep_time[0])</formula>
+			<formula>E [&lt;= 1000000; 1] (max: sleep_time[100])</formula>
 			<comment></comment>
 		</query>
 		<query>
@@ -3907,7 +3916,7 @@ UserStates, UserConnect, UserStream, UserSample, UserSleep, InternalUEProcessing
 			<comment></comment>
 		</query>
 		<query>
-			<formula>E [&lt;= 200000000; 5] (max: sum(i:UEid_t) data_transmit[i])</formula>
+			<formula>E [&lt;= 2000000; 5] (max: sum(i:UEid_t) data_transmit[i])</formula>
 			<comment></comment>
 		</query>
 		<query>
